@@ -1,0 +1,62 @@
+from sqlalchemy import Column, Integer, String, Float, Text, ForeignKey, DateTime, Boolean, JSON
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
+from app.database import Base
+
+class Product(Base):
+    __tablename__ = "products"
+
+    id = Column(String(50), primary_key=True, index=True) # Using String ID to match frontend "prod_" generation or UUID
+    name = Column(String(255), nullable=False)
+    category = Column(String(100))
+    brand = Column(String(100))
+    
+    # Pricing
+    b2c_price = Column(Float, default=0.0)
+    compare_at_price = Column(Float, default=0.0) # MRP
+    b2b_price = Column(Float, default=0.0)
+    
+    # Offers
+    b2c_offer_percentage = Column(Float, default=0.0)
+    b2c_offer_start_date = Column(DateTime, nullable=True)
+    b2c_offer_end_date = Column(DateTime, nullable=True)
+    
+    b2b_offer_percentage = Column(Float, default=0.0)
+    b2b_offer_start_date = Column(DateTime, nullable=True)
+    b2b_offer_end_date = Column(DateTime, nullable=True)
+    
+    description = Column(Text, nullable=True)
+    status = Column(String(50), default="Draft") # Active, Draft, Archived
+    stock = Column(Integer, default=0)
+    image = Column(Text, nullable=True)
+    
+    rating = Column(Float, default=0.0)
+    reviews = Column(Integer, default=0)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    attributes = relationship("ProductAttribute", back_populates="product", cascade="all, delete-orphan")
+    variants = relationship("ProductVariant", back_populates="product", cascade="all, delete-orphan")
+
+class ProductAttribute(Base):
+    __tablename__ = "product_attributes"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(String(50), ForeignKey("products.id"))
+    name = Column(String(100))
+    value = Column(String(255))
+    
+    product = relationship("Product", back_populates="attributes")
+
+class ProductVariant(Base):
+    __tablename__ = "product_variants"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(String(50), ForeignKey("products.id"))
+    color = Column(String(50))
+    color_code = Column(String(20))
+    stock = Column(Integer, default=0)
+    
+    product = relationship("Product", back_populates="variants")
