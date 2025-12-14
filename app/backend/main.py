@@ -665,3 +665,121 @@ async def update_user_profile(
     finally:
         cursor.close()
         conn.close()
+============================ ORDER PLACEMENT ============================
+
+@app.post("/orders/place")
+async def place_order_from_app(order_data: OrderCreate, current_user_id: str = Depends(get_current_user)):
+    """
+    Receives a complete order object from the Flutter app and saves it to the MySQL 'orders' table.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # 1. Prepare Order Items JSON
+        # Since the SQL table has a single 'items' column, we need to serialize the list of products
+        items_json_list = [item.model_dump_json() for item in order_data.products]
+        items_json_string = json.dumps(items_json_list)
+
+        # 2. Map to SQL table structure
+        
+        # Use the user_id as the 'customer' foreign key reference if available, or use email/name
+        customer_name = order_data.customer_email.split('@')[0] # Simple default name
+
+        # The 'type' field (varchar(50)) can be derived from the JWT user_type dependency.
+        # We re-fetch user_type to ensure it's correct for the order record.
+        try:
+            from fastapi import Request
+            request = Request.scope.get("request")
+            token = request.headers.get("authorization").split(" ")[1]
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            actual_user_type = payload.get("user_type", "b2c")
+        except:
+            actual_user_type = order_data.user_type # Fallback
+
+        cursor.execute("""
+            INSERT INTO orders (
+                id, customer, email, amount, items_count, type, status, payment_status, date, address
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            order_data.order_id,
+            current_user_id, # Use current_user_id (from auth_users.id) as the customer reference
+            order_data.customer_email,
+            order_data.total_price,
+            len(order_data.products),
+            actual_user_type,
+            order_data.order_status, # e.g., 'processing'
+            "pending", # Default payment status until payment is confirmed
+            datetime.strptime(order_data.placed_on, '%d/%m/%Y').strftime('%Y-%m-%d %H:%M:%S'),
+            order_data.customer_address_text
+        ))
+        
+        conn.commit()
+
+        return {
+            "message": "Order saved successfully",
+            "order_id": order_data.order_id,
+            "user_id_saved_as_customer": current_user_id
+        }
+    except Exception as e:
+        conn.rollback()
+        print(f"Error saving order: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save order: {str(e)}")
+    finally:
+        cursor.close()
+        conn.close()# In your FastAPI backend
+@app.get("/orders/user/{user_email}")
+async def get_orders_by_user(
+    user_email: str,
+    current_user_id: str = Depends(get_current_user)
+):
+    """
+    Get all orders for a specific user by email.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        # Fetch orders for the user
+        cursor.execute("""
+            SELECT * FROM orders 
+            WHERE email = %s 
+            ORDER BY date DESC
+        """, (user_email,))
+        
+        orders = cursor.fetchall()
+        
+        # Format the response to match your app's expected structure
+        formatted_orders = []
+        for order in orders:
+            try:
+                # Parse items JSON
+                items = json.loads(order['items']) if order['items'] else []
+            except:
+                items = []
+                
+            formatted_orders.append({
+                'id': order['id'],
+                'customer': order['customer'],
+                'email': order['email'],
+                'amount': float(order['amount']) if order['amount'] else 0.0,
+                'items_count': order['items_count'],
+                'type': order['type'],
+                'status': order['status'],
+                'payment_status': order['payment_status'],
+                'date': order['date'].strftime('%Y-%m-%d') if order['date'] else '',
+                'address': order['address'],
+                'items': items
+            })
+        
+        return {
+            "success": True,
+            "orders": formatted_orders,
+            "count": len(orders)
+        }
+        
+    except Exception as e:
+        print(f"Error fetching orders: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch orders: {str(e)}")
+    finally:
+        cursor.close()
+        conn.close()        
