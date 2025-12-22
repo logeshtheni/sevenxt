@@ -1,153 +1,271 @@
+import React, { useEffect, useRef, useState } from "react";
+import {
+  Layout,
+  Image as ImageIcon,
+  Bell,
+  FileText,
+  Plus,
+  Trash2,
+  Edit,
+  UploadCloud,
+  Smartphone,
+  Globe,
+  X,
+} from "lucide-react";
 
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Layout, Image as ImageIcon, Bell, FileText, Plus, Trash2, Edit, 
-  Save, UploadCloud, CheckCircle, Search, Smartphone, Globe, Eye, MoreVertical, Layers, X, AlertCircle
-} from 'lucide-react';
+import {
+  getCMSBanners,
+  createCMSBanner,
+  updateCMSBanner,
+  deleteCMSBanner,
+  getCMSCategoryBanners,
+  updateCMSCategoryBanner,
+  getCMSNotifications,
+  sendCMSNotification,
+  getCMSPages,
+  updateCMSPage,
+} from "../services/api";
 
-interface CMSViewProps {
-  activeView?: string;
-}
+/* =======================
+   TABS 
+======================= */
 
 const TABS = [
-  { id: 'cms-home', label: 'Homepage Banners', icon: <Layout size={18} /> },
-  { id: 'cms-category', label: 'Category Banners', icon: <Layers size={18} /> },
-  { id: 'cms-notif', label: 'Notification Manager', icon: <Bell size={18} /> },
-  { id: 'cms-pages', label: 'Static Pages', icon: <FileText size={18} /> },
+  { id: "cms-home", label: "Homepage Banners", icon: <Layout size={18} /> },
+  { id: "cms-category", label: "Category Banners", icon: <ImageIcon size={18} /> },
+  { id: "cms-notif", label: "Notification Manager", icon: <Bell size={18} /> },
+  { id: "cms-pages", label: "Static Pages", icon: <FileText size={18} /> },
 ];
 
-const INITIAL_BANNERS = [
-  { id: 1, title: 'Summer Sale Hero', image: 'https://picsum.photos/800/300?random=1', position: 'Hero Slider', status: 'Active' },
-  { id: 2, title: 'New Arrivals Strip', image: 'https://picsum.photos/800/300?random=2', position: 'Mid Page', status: 'Active' },
-  { id: 3, title: 'Electronics Promo', image: 'https://picsum.photos/800/300?random=3', position: 'Hero Slider', status: 'Inactive' },
+/* =======================
+   CATEGORY MAPPING
+======================= */
+
+const CATEGORIES = [
+  { id: 1, name: "All gadgets" },
+  { id: 2, name: "mobile & devices" },
+  { id: 3, name: "laptops & pc" },
+  { id: 4, name: "cameras & photography" },
+  { id: 5, name: "wearables" },
+  { id: 6, name: "tv & entertainment" },
+  { id: 7, name: "networking" },
+  { id: 8, name: "peripherals" },
 ];
 
-const INITIAL_PAGES = [
-  { id: 1, title: 'About Us', slug: '/about', lastUpdated: '2024-05-10', status: 'Published', content: 'Welcome to Nexus Commerce. We are dedicated to providing...' },
-  { id: 2, title: 'Terms & Conditions', slug: '/terms', lastUpdated: '2024-01-15', status: 'Published', content: 'By accessing this website, you agree to be bound by these...' },
-  { id: 3, title: 'Privacy Policy', slug: '/privacy', lastUpdated: '2024-01-15', status: 'Published', content: 'Your privacy is important to us. This policy explains...' },
-  { id: 4, title: 'Refund Policy', slug: '/refunds', lastUpdated: '2024-03-20', status: 'Published', content: 'We offer a 30-day money-back guarantee on all items...' },
-];
+const CMSView: React.FC = () => {
+  const [activeTab, setActiveTab] = useState("cms-home");
 
-export const CMSView: React.FC<CMSViewProps> = ({ activeView }) => {
-  const [activeTab, setActiveTab] = useState('cms-home');
+  /* =======================
+      HOMEPAGE BANNERS
+  ======================= */
 
-  useEffect(() => {
-    if (activeView && activeView !== 'CMS') {
-      setActiveTab(activeView);
-    }
-  }, [activeView]);
-
-  // --- HOMEPAGE BANNERS STATE ---
-  const [banners, setBanners] = useState(INITIAL_BANNERS);
+  const [banners, setBanners] = useState<any[]>([]);
   const [isBannerModalOpen, setIsBannerModalOpen] = useState(false);
   const [currentBannerId, setCurrentBannerId] = useState<number | null>(null);
-  const [bannerForm, setBannerForm] = useState({ title: '', image: '', position: 'Hero Slider', status: 'Active' });
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string>("");
 
-  // --- CATEGORY BANNERS STATE ---
-  const [selectedCategory, setSelectedCategory] = useState('Electronics');
-  const [categoryImages, setCategoryImages] = useState<Record<string, string>>({
-    'Electronics': 'https://picsum.photos/1200/300?random=10',
-    'Furniture': 'https://picsum.photos/1200/300?random=11',
-    'Fashion': 'https://picsum.photos/1200/300?random=12',
-    'Home & Kitchen': 'https://picsum.photos/1200/300?random=13',
+  const [bannerForm, setBannerForm] = useState({
+    title: "",
+    image: "",
+    position: "Hero Slider",
+    status: "Active",
   });
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // --- NOTIFICATIONS STATE ---
-  const [notifHistory, setNotifHistory] = useState([
-    { id: 1, title: 'Weekend Bonanza!', message: 'Grab the best deals on furniture before stocks run out.', time: '2 hours ago', status: 'SENT' },
-    { id: 2, title: 'System Maintenance', message: 'Scheduled downtime tonight at 2 AM.', time: '1 day ago', status: 'SENT' },
-    { id: 3, title: 'New Collection Alert', message: 'Check out our latest summer collection.', time: '3 days ago', status: 'SENT' },
-  ]);
-  const [notifForm, setNotifForm] = useState({ title: '', message: '', audience: 'All Users' });
+  const uploadBannerImage = async (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
 
-  // --- STATIC PAGES STATE ---
-  const [pages, setPages] = useState(INITIAL_PAGES);
-  const [isPageModalOpen, setIsPageModalOpen] = useState(false);
-  const [pageForm, setPageForm] = useState({ id: 0, title: '', content: '' });
+    const baseUrl = (import.meta as any).env?.VITE_API_BASE_URL || "http://localhost:8001";
 
-  // --- HANDLERS: HOMEPAGE BANNERS ---
-  const openBannerModal = (banner?: typeof banners[0]) => {
+    try {
+      const res = await fetch(
+        `${baseUrl}/api/v1/cms/banners/upload`,
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Server responded with ${res.status}: ${errorText}`);
+      }
+
+      const data = await res.json();
+      setUploadedImageUrl(data.url);
+    } catch (error) {
+      console.error("Upload failed:", error);
+      alert("Failed to upload image. Please ensure your backend is running.");
+    }
+  };
+
+  const openBannerModal = (banner?: any) => {
+    setUploadedImageUrl(""); 
     if (banner) {
       setCurrentBannerId(banner.id);
-      setBannerForm({ title: banner.title, image: banner.image, position: banner.position, status: banner.status });
+      setBannerForm({
+        title: banner.title,
+        image: banner.image,
+        position: banner.position,
+        status: banner.status,
+      });
     } else {
       setCurrentBannerId(null);
-      setBannerForm({ title: '', image: '', position: 'Hero Slider', status: 'Active' });
+      setBannerForm({
+        title: "",
+        image: "",
+        position: "Hero Slider",
+        status: "Active",
+      });
     }
     setIsBannerModalOpen(true);
   };
 
-  const saveBanner = () => {
+  const saveBanner = async () => {
+    if (!uploadedImageUrl && !currentBannerId) {
+      alert("Please upload an image first");
+      return;
+    }
+
+    const payload = {
+      ...bannerForm,
+      image: uploadedImageUrl || bannerForm.image,
+    };
+
     if (currentBannerId) {
-      // Edit
-      setBanners(prev => prev.map(b => b.id === currentBannerId ? { ...b, ...bannerForm } : b));
+      await updateCMSBanner(currentBannerId, payload);
     } else {
-      // Add
-      const newBanner = {
-        id: Date.now(),
-        ...bannerForm,
-        image: bannerForm.image || `https://picsum.photos/800/300?random=${Date.now()}` // Fallback mock image
-      };
-      setBanners(prev => [newBanner, ...prev]);
+      await createCMSBanner(payload);
     }
+
     setIsBannerModalOpen(false);
+    setUploadedImageUrl("");
+    fetchBanners();
   };
 
-  const deleteBanner = (id: number) => {
-    if (confirm('Are you sure you want to delete this banner?')) {
-      setBanners(prev => prev.filter(b => b.id !== id));
-    }
+  const deleteBanner = async (id: number) => {
+    await deleteCMSBanner(id);
+    fetchBanners();
   };
 
-  // --- HANDLERS: CATEGORY BANNERS ---
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const imageUrl = URL.createObjectURL(file);
-      setCategoryImages(prev => ({ ...prev, [selectedCategory]: imageUrl }));
-    }
+  const fetchBanners = async () => {
+    const data = await getCMSBanners();
+    setBanners(data);
   };
+
+  /* =======================
+      CATEGORY BANNERS
+  ======================= */
+
+  const [categoryImages, setCategoryImages] = useState<any[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<number>(CATEGORIES[0].id);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const triggerFileInput = () => {
     fileInputRef.current?.click();
   };
 
-  // --- HANDLERS: NOTIFICATIONS ---
-  const sendNotification = () => {
-    if (!notifForm.title || !notifForm.message) return alert("Please fill in title and message");
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || !selectedCategory) return;
     
-    const newNotif = {
-      id: Date.now(),
-      title: notifForm.title,
-      message: notifForm.message,
-      time: 'Just now',
-      status: 'SENT'
-    };
-    
-    setNotifHistory(prev => [newNotif, ...prev]);
-    setNotifForm({ title: '', message: '', audience: 'All Users' });
-    alert(`Notification "${notifForm.title}" sent to ${notifForm.audience}!`);
+    const file = e.target.files[0];
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const baseUrl = (import.meta as any).env?.VITE_API_BASE_URL || "http://localhost:8001";
+
+    try {
+      const res = await fetch(
+        `${baseUrl}/api/v1/cms/category-banners/${selectedCategory}/upload`,
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      if (!res.ok) throw new Error(`Upload failed with status: ${res.status}`);
+      const data = await res.json();
+      
+      await updateCMSCategoryBanner(selectedCategory as any, { 
+        image_url: data.url 
+      } as any);
+      
+      await loadCategoryBanners();
+      alert("Category banner updated successfully!");
+    } catch (error: any) {
+      console.error("Category upload failed:", error);
+      alert(`Update Failed: ${error.message || "Check console for details"}`);
+    }
   };
 
-  // --- HANDLERS: STATIC PAGES ---
-  const openPageModal = (page: typeof pages[0]) => {
-    setPageForm({ id: page.id, title: page.title, content: page.content });
+  const loadCategoryBanners = async () => {
+    const data = await getCMSCategoryBanners();
+    setCategoryImages(data);
+  };
+
+  /* =======================
+      NOTIFICATIONS
+  ======================= */
+
+  const [notifHistory, setNotifHistory] = useState<any[]>([]);
+  const [notifForm, setNotifForm] = useState({
+    title: "",
+    message: "",
+    audience: "All Users",
+  });
+
+  const sendNotification = async () => {
+    await sendCMSNotification(notifForm);
+    setNotifForm({ title: "", message: "", audience: "All Users" });
+    loadNotifications();
+  };
+
+  const loadNotifications = async () => {
+    const data = await getCMSNotifications();
+    setNotifHistory(data);
+  };
+
+  /* =======================
+      STATIC PAGES
+  ======================= */
+
+  const [pages, setPages] = useState<any[]>([]);
+  const [isPageModalOpen, setIsPageModalOpen] = useState(false);
+  const [pageForm, setPageForm] = useState<any>(null);
+
+  const openPageModal = (page: any) => {
+    setPageForm({ ...page });
     setIsPageModalOpen(true);
   };
 
-  const savePage = () => {
-    setPages(prev => prev.map(p => p.id === pageForm.id ? { 
-      ...p, 
-      content: pageForm.content, 
+  const savePage = async () => {
+    await updateCMSPage(pageForm.id, {
       title: pageForm.title,
-      lastUpdated: new Date().toISOString().split('T')[0] 
-    } : p));
+      content: pageForm.content,
+    });
     setIsPageModalOpen(false);
+    loadPages();
   };
 
-  // --- RENDERERS ---
+  const loadPages = async () => {
+    const data = await getCMSPages();
+    setPages(data);
+  };
+
+  /* =======================
+      INITIAL LOAD
+  ======================= */
+
+  useEffect(() => {
+    fetchBanners();
+    loadCategoryBanners();
+    loadNotifications();
+    loadPages();
+  }, []);
+
+  /* =======================
+      RENDER FUNCTIONS
+  ======================= */
 
   const renderHomeBanners = () => (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
@@ -200,7 +318,6 @@ export const CMSView: React.FC<CMSViewProps> = ({ activeView }) => {
           </div>
         ))}
         
-        {/* Upload Placeholder */}
         <div 
           onClick={() => openBannerModal()}
           className="border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center h-full min-h-[200px] bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer group"
@@ -213,7 +330,6 @@ export const CMSView: React.FC<CMSViewProps> = ({ activeView }) => {
         </div>
       </div>
 
-      {/* Banner Modal */}
       {isBannerModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
@@ -233,17 +349,36 @@ export const CMSView: React.FC<CMSViewProps> = ({ activeView }) => {
                   onChange={e => setBannerForm({...bannerForm, title: e.target.value})}
                 />
               </div>
+
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Image URL</label>
-                <input 
-                  type="text" 
-                  placeholder="https://..."
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-gray-900"
-                  value={bannerForm.image}
-                  onChange={e => setBannerForm({...bannerForm, image: e.target.value})}
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Banner Image
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    if (e.target.files?.[0]) {
+                      uploadBannerImage(e.target.files[0]);
+                    }
+                  }}
+                  className="w-full text-sm text-slate-600
+                    file:mr-4 file:py-2 file:px-4
+                    file:rounded-lg file:border-0
+                    file:text-sm file:font-semibold
+                    file:bg-gray-900 file:text-white
+                    hover:file:bg-gray-800 cursor-pointer"
                 />
-                <p className="text-xs text-slate-400 mt-1">Leave empty for a random placeholder.</p>
+
+                {(uploadedImageUrl || bannerForm.image) ? (
+                  <img
+                    src={uploadedImageUrl || bannerForm.image}
+                    alt="Preview"
+                    className="mt-3 h-32 w-full object-cover rounded-lg border"
+                  />
+                ) : null}
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Position</label>
                 <select 
@@ -283,29 +418,34 @@ export const CMSView: React.FC<CMSViewProps> = ({ activeView }) => {
   const renderCategoryBanners = () => (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
-               <div>
-                   <label className="block text-sm font-medium text-slate-700 mb-2">Select Category</label>
-                   <select 
-                    className="w-full px-4 py-2 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-gray-900"
-                    value={selectedCategory}
-                    onChange={(e) => setSelectedCategory(e.target.value)}
-                   >
-                       {Object.keys(categoryImages).map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                   </select>
-               </div>
-               <div>
-                   <button className="px-6 py-2 bg-white border border-slate-300 text-slate-700 font-medium rounded-xl hover:bg-slate-50 transition-colors w-full">
-                       Current Banner Loaded
-                   </button>
-               </div>
-           </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
+                <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Select Category</label>
+                    <select 
+                     className="w-full px-4 py-2 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-gray-900"
+                     value={selectedCategory}
+                     onChange={(e) => setSelectedCategory(Number(e.target.value))}
+                    >
+                        {CATEGORIES.map(cat => (
+                          <option key={cat.id} value={cat.id}>
+                            {cat.name}
+                          </option>
+                        ))}
+                    </select>
+                </div>
+            </div>
         </div>
 
         <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm text-center">
-            <h3 className="text-lg font-bold text-slate-900 mb-4">{selectedCategory} Header Banner</h3>
+            <h3 className="text-lg font-bold text-slate-900 mb-4">
+              {CATEGORIES.find(c => c.id === selectedCategory)?.name} Header Banner
+            </h3>
             <div className="relative w-full h-48 bg-slate-100 rounded-xl overflow-hidden flex items-center justify-center mb-6 group">
-                 <img src={categoryImages[selectedCategory]} alt="Category" className="w-full h-full object-cover" />
+                {categoryImages.find((img: any) => img.id === selectedCategory)?.image_url ? (
+                    <img src={categoryImages.find((img: any) => img.id === selectedCategory).image_url} alt="Category" className="w-full h-full object-cover" />
+                 ) : (
+                    <ImageIcon size={48} className="text-slate-300" />
+                 )}
                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30">
                     <button 
                       onClick={triggerFileInput}
@@ -338,7 +478,6 @@ export const CMSView: React.FC<CMSViewProps> = ({ activeView }) => {
 
   const renderNotifications = () => (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-2">
-        {/* Compose */}
         <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
             <div className="flex items-center gap-2 mb-6 pb-4 border-b border-slate-100">
                 <Smartphone size={20} className="text-gray-900" />
@@ -373,10 +512,10 @@ export const CMSView: React.FC<CMSViewProps> = ({ activeView }) => {
                       value={notifForm.audience}
                       onChange={e => setNotifForm({...notifForm, audience: e.target.value})}
                     >
-                       <option>All Users</option>
-                       <option>B2B Customers Only</option>
-                       <option>B2C Customers Only</option>
-                       <option>Inactive Users (30+ Days)</option>
+                        <option>All Users</option>
+                        <option>B2B Customers Only</option>
+                        <option>B2C Customers Only</option>
+                        <option>Inactive Users (30+ Days)</option>
                    </select>
                 </div>
                 <div className="pt-4 flex justify-end">
@@ -390,7 +529,6 @@ export const CMSView: React.FC<CMSViewProps> = ({ activeView }) => {
             </div>
         </div>
 
-        {/* History */}
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm h-fit">
             <h3 className="text-lg font-bold text-slate-900 mb-4">Recent History</h3>
             <div className="space-y-4">
@@ -437,21 +575,32 @@ export const CMSView: React.FC<CMSViewProps> = ({ activeView }) => {
                     {page.title}
                 </td>
                 <td className="px-6 py-4 text-sm text-slate-500 font-mono">{page.slug}</td>
-                <td className="px-6 py-4 text-sm text-slate-500">{page.lastUpdated}</td>
+                
+                {/* --- FIXED LAST UPDATED COLUMN --- */}
+                <td className="px-6 py-4 text-sm text-slate-500">
+                    {page.updated_at ? new Date(page.updated_at).toLocaleString('en-IN', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    }) : "Never"}
+                </td>
+                
                 <td className="px-6 py-4">
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-100 text-emerald-700 border border-emerald-200">
                     {page.status}
                   </span>
                 </td>
                 <td className="px-6 py-4 text-right">
-                   <div className="flex items-center justify-end gap-2">
-                        <button 
+                    <div className="flex items-center justify-end gap-2">
+                         <button 
                           onClick={() => openPageModal(page)}
                           className="p-2 text-slate-400 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
                         >
-                            <Edit size={16} />
-                        </button>
-                   </div>
+                             <Edit size={16} />
+                         </button>
+                    </div>
                 </td>
               </tr>
             ))}
@@ -459,7 +608,6 @@ export const CMSView: React.FC<CMSViewProps> = ({ activeView }) => {
         </table>
       </div>
 
-      {/* Page Edit Modal */}
       {isPageModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl h-[80vh] flex flex-col animate-in zoom-in-95 duration-200">
@@ -474,7 +622,7 @@ export const CMSView: React.FC<CMSViewProps> = ({ activeView }) => {
                 <label className="block text-sm font-medium text-slate-700 mb-1">Page Title</label>
                 <input 
                   type="text" 
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-gray-900"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-gray-900"
                   value={pageForm.title}
                   onChange={e => setPageForm({...pageForm, title: e.target.value})}
                 />
@@ -500,13 +648,11 @@ export const CMSView: React.FC<CMSViewProps> = ({ activeView }) => {
 
   return (
     <div className="flex flex-col h-screen bg-slate-50 overflow-hidden font-sans">
-      {/* Header */}
       <div className="bg-white border-b border-slate-200 px-6 py-5 shrink-0">
         <h1 className="text-2xl font-bold text-slate-900">Content Management</h1>
         <p className="text-slate-500 text-sm">Manage app banners, notifications, and static content.</p>
       </div>
 
-      {/* Tab Navigation */}
       <div className="bg-white border-b border-slate-200 px-6 pt-2">
         <nav className="-mb-px flex space-x-8 overflow-x-auto no-scrollbar">
           {TABS.map((tab) => (
@@ -529,7 +675,6 @@ export const CMSView: React.FC<CMSViewProps> = ({ activeView }) => {
         </nav>
       </div>
 
-      {/* Main Content */}
       <div className="flex-1 overflow-y-auto p-8">
          <div className="max-w-6xl mx-auto">
              {activeTab === 'cms-home' && renderHomeBanners()}
@@ -541,3 +686,5 @@ export const CMSView: React.FC<CMSViewProps> = ({ activeView }) => {
     </div>
   );
 };
+
+export default CMSView;
