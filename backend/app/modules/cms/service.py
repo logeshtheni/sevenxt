@@ -33,7 +33,7 @@ def delete_banner(db: Session, banner_id: int):
 
 def update_banner(db: Session, banner_id: int, banner_data: dict):
     # 1. Find the banner by ID
-    db_banner = db.query(models.Banner).filter(models.Banner.id == banner_id).first()
+    db_banner = db.query(models.CMSBanner).filter(models.CMSBanner.id == banner_id).first()
     
     if db_banner:
         # 2. Loop through the new data and update the fields

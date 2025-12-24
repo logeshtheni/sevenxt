@@ -204,7 +204,7 @@ const CMSView: React.FC = () => {
   };
 
   /* =======================
-      NOTIFICATIONS
+      NOTIFICATIONS (Updated with Validation)
   ======================= */
 
   const [notifHistory, setNotifHistory] = useState<any[]>([]);
@@ -215,9 +215,20 @@ const CMSView: React.FC = () => {
   });
 
   const sendNotification = async () => {
-    await sendCMSNotification(notifForm);
-    setNotifForm({ title: "", message: "", audience: "All Users" });
-    loadNotifications();
+    // Validation Check
+    if (!notifForm.title.trim() || !notifForm.message.trim()) {
+      alert("Please fill in all required details (Title and Message).");
+      return;
+    }
+
+    try {
+      await sendCMSNotification(notifForm);
+      setNotifForm({ title: "", message: "", audience: "All Users" });
+      loadNotifications();
+      alert("Notification sent successfully!");
+    } catch (error) {
+      console.error("Failed to send notification:", error);
+    }
   };
 
   const loadNotifications = async () => {

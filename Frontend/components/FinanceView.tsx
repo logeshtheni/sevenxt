@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   CreditCard, FileText, RefreshCcw, Percent, DollarSign, 
-  Search, Filter, TrendingUp, MoreVertical, X, RotateCcw
+  Search, Filter, TrendingUp, MoreVertical, X, RotateCcw, User
 } from 'lucide-react';
 import { getTransactions } from '../services/api'; 
+import Swal from 'sweetalert2';
 
 export const FinanceView: React.FC = () => {
   const [activeTab, setActiveTab] = useState('Payments');
@@ -12,14 +13,12 @@ export const FinanceView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refundingId, setRefundingId] = useState<string | null>(null);
 
-  // Stats State
   const [stats, setStats] = useState({
     totalVolume: 0,
     successRate: 0,
     failedCount: 0
   });
 
-  // Filter Modal State
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
@@ -31,12 +30,26 @@ export const FinanceView: React.FC = () => {
     to: ''
   });
 
-  // --- NEW: REFUND HANDLER ---
   const handleRefund = async (paymentId: string) => {
-    if (!paymentId) return alert("No Payment ID found for this transaction.");
+    if (!paymentId) {
+        Swal.fire({ title: 'Error', text: 'No Payment ID found.', icon: 'error', customClass: { popup: 'rounded-2xl' } });
+        return;
+    }
     
-    const confirmRefund = window.confirm(`Are you sure you want to refund payment ${paymentId}?`);
-    if (!confirmRefund) return;
+    const result = await Swal.fire({
+        title: 'Confirm Refund',
+        text: `Are you sure you want to refund payment ${paymentId}?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#e11d48', 
+        cancelButtonColor: '#64748b',  
+        confirmButtonText: 'Yes, Refund it!',
+        customClass: {
+            popup: 'rounded-3xl',
+        }
+    });
+
+    if (!result.isConfirmed) return;
 
     setRefundingId(paymentId);
     try {
@@ -48,14 +61,25 @@ export const FinanceView: React.FC = () => {
         const data = await response.json();
 
         if (response.ok) {
-            alert("✅ Refund Processed Successfully!");
-            loadFinanceData(); // Refresh list to show 'REFUNDED' status
+            Swal.fire({
+                title: 'Success!',
+                text: '✅ Refund Processed Successfully!',
+                icon: 'success',
+                confirmButtonColor: '#4f46e5',
+                customClass: { popup: 'rounded-3xl' }
+            });
+            loadFinanceData(); 
         } else {
-            alert("❌ Refund Failed: " + (data.detail || "Unknown error"));
+            Swal.fire({
+                title: 'Refund Failed',
+                text: '❌ ' + (data.detail || "Unknown error"),
+                icon: 'error',
+                confirmButtonColor: '#000000',
+                customClass: { popup: 'rounded-3xl' }
+            });
         }
     } catch (error) {
-        console.error("Refund error:", error);
-        alert("Server error. Check if backend is running.");
+        Swal.fire({ title: 'Server Error', text: 'Could not reach the backend.', icon: 'error', customClass: { popup: 'rounded-3xl' } });
     } finally {
         setRefundingId(null);
     }
@@ -66,34 +90,18 @@ export const FinanceView: React.FC = () => {
     try {
       const data = await getTransactions(); 
       setTransactions(data);
-      
       const success = data.filter((t: any) => t.status === 'SUCCESS');
       const totalAmt = success.reduce((acc: number, curr: any) => acc + Number(curr.amount), 0);
       const sRate = data.length > 0 ? (success.length / data.length) * 100 : 0;
       const fCount = data.filter((t: any) => t.status === 'FAILED').length;
-
-      setStats({
-        totalVolume: totalAmt,
-        successRate: sRate,
-        failedCount: fCount
-      });
-    } catch (error) {
-      console.error("Failed to fetch transactions", error);
-    } finally {
-      setLoading(false);
-    }
+      setStats({ totalVolume: totalAmt, successRate: sRate, failedCount: fCount });
+    } catch (error) { console.error(error); } finally { setLoading(false); }
   };
 
-  useEffect(() => {
-    loadFinanceData();
-  }, []);
+  useEffect(() => { loadFinanceData(); }, []);
 
   const applyFilters = () => {
-      setAppliedFilters({
-          status: filterStatus,
-          from: filterDateFrom,
-          to: filterDateTo
-      });
+      setAppliedFilters({ status: filterStatus, from: filterDateFrom, to: filterDateTo });
       setShowFilterModal(false);
   };
 
@@ -110,7 +118,12 @@ export const FinanceView: React.FC = () => {
           if (appliedFilters.to && txnDate > new Date(appliedFilters.to)) return false;
           if (searchTerm) {
               const searchLower = searchTerm.toLowerCase();
-              return txn.razorpay_payment_id?.toLowerCase().includes(searchLower) || txn.internal_order_id.toLowerCase().includes(searchLower);
+              return (
+                txn.razorpay_payment_id?.toLowerCase().includes(searchLower) || 
+                txn.internal_order_id.toLowerCase().includes(searchLower) ||
+                txn.user_email?.toLowerCase().includes(searchLower) ||
+                txn.customer_contact?.includes(searchTerm)
+              );
           }
           return true;
       });
@@ -136,7 +149,6 @@ export const FinanceView: React.FC = () => {
 
   const renderPayments = () => (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
-      {/* STATS CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
            <p className="text-sm text-slate-500 font-medium">Total Volume (Real-time)</p>
@@ -158,14 +170,11 @@ export const FinanceView: React.FC = () => {
            <p className="text-sm text-slate-500 font-medium">Failed Transactions</p>
            <div className="flex items-end justify-between mt-2">
               <h3 className="text-2xl font-bold text-rose-600">{stats.failedCount}</h3>
-              <span className="flex items-center text-xs font-bold text-rose-600 bg-rose-50 px-2 py-1 rounded-lg">
-                Alert
-              </span>
+              <span className="flex items-center text-xs font-bold text-rose-600 bg-rose-50 px-2 py-1 rounded-lg">Alert</span>
            </div>
         </div>
       </div>
 
-      {/* TABLE */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-6 py-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
             <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Transaction List</h3>
@@ -177,9 +186,9 @@ export const FinanceView: React.FC = () => {
               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Date</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Order Ref</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Amount</th>
+              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Customer</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Status</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Action</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Customer</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -190,13 +199,18 @@ export const FinanceView: React.FC = () => {
                 <td className="px-6 py-4 text-sm text-slate-900 font-medium">{txn.internal_order_id}</td>
                 <td className="px-6 py-4 text-sm font-bold text-slate-900">₹{Number(txn.amount).toFixed(2)}</td>
                 <td className="px-6 py-4">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium text-slate-900">{txn.user_email || 'No Email'}</span>
+                    <span className="text-[11px] text-slate-400 font-medium">{txn.customer_contact || 'No Contact'}</span>
+                  </div>
+                </td>
+                <td className="px-6 py-4">
                   <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase border ${getStatusColor(txn.status)}`}>
                     {txn.status}
                   </span>
                 </td>
                 <td className="px-6 py-4 text-right">
                     <div className="flex justify-end gap-2">
-                      {/* REFUND BUTTON - DESIGNED TO MATCH YOUR ACTION AREA */}
                       {txn.status === 'SUCCESS' && (
                         <button 
                           onClick={() => handleRefund(txn.razorpay_payment_id)}
@@ -224,7 +238,6 @@ export const FinanceView: React.FC = () => {
         <h1 className="text-2xl font-bold text-slate-900">Payments & Finance</h1>
         <p className="text-slate-500 text-sm">Manage real-time Razorpay transactions and settlements.</p>
       </div>
-
       <div className="bg-white border-b border-slate-200 px-6 pt-2 shrink-0">
         <nav className="-mb-px flex space-x-8 overflow-x-auto no-scrollbar">
           {TABS.map((tab) => (
@@ -239,13 +252,12 @@ export const FinanceView: React.FC = () => {
           ))}
         </nav>
       </div>
-
       <div className="px-6 py-4 flex items-center justify-between gap-4 shrink-0 bg-slate-50">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <input 
                 type="text" 
-                placeholder={`Search payments...`}
+                placeholder={`Search payments, email, or contact...`}
                 className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm outline-none shadow-sm text-gray-900"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -256,12 +268,7 @@ export const FinanceView: React.FC = () => {
             <button onClick={() => loadFinanceData()} className="p-2 bg-white border rounded-lg hover:bg-gray-50"><RefreshCcw size={16} className={loading ? 'animate-spin' : ''}/></button>
           </div>
       </div>
-
-      <div className="flex-1 overflow-y-auto p-6">
-        {activeTab === 'Payments' && renderPayments()}
-      </div>
-
-      {/* FILTER MODAL */}
+      <div className="flex-1 overflow-y-auto p-6">{activeTab === 'Payments' && renderPayments()}</div>
       {showFilterModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
             <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl">
@@ -294,4 +301,3 @@ export const FinanceView: React.FC = () => {
     </div>
   );
 };
-export default FinanceView;
