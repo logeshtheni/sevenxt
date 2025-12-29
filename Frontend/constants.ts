@@ -1,5 +1,20 @@
+<<<<<<< HEAD
 import { Order, Product, SalesData, User, B2BUser, Delivery, LocalDelivery, Refund, Category, PorterRateRule, PorterZone, KYCRequest, ActivityLog, SystemLog, ProductVariant } from "./types";
 
+=======
+import { Order, Product, SalesData, User, B2BUser, Delivery, LocalDelivery, Refund, Category, PorterRateRule, PorterZone, KYCRequest, ActivityLog, SystemLog, Brand, ProductVariant } from "./types";
+
+export const MOCK_BRANDS: Brand[] = [
+  { id: 'br_1', name: 'Samsung', logo: 'https://cdn.wallpapersafari.com/76/68/7F8uTy.jpg', productCount: 120, status: 'Active' },
+  { id: 'br_2', name: 'Apple', logo: 'https://storage.googleapis.com/webdesignledger.pub.network/WDL/maxresdefault.jpg', productCount: 85, status: 'Active' },
+  { id: 'br_3', name: 'Sony', logo: 'https://th.bing.com/th/id/OIP.CcCcAj6-wMdaqcRT3v6EIwHaHa?o=7rm=3&rs=1&pid=ImgDetMain&o=7&rm=3', productCount: 90, status: 'Active' },
+  { id: 'br_4', name: 'LG', logo: 'https://logos-world.net/wp-content/uploads/2020/05/LG-Symbol.png', productCount: 65, status: 'Active' },
+  { id: 'br_5', name: 'Dell', logo: 'https://logos-world.net/wp-content/uploads/2020/08/Dell-Emblem.jpg', productCount: 45, status: 'Active' },
+  { id: 'br_6', name: 'HP', logo: 'https://static.vecteezy.com/system/resources/previews/022/101/041/original/hp-logo-transparent-free-png.png', productCount: 50, status: 'Active' },
+  { id: 'br_7', name: 'Havells', logo: 'https://vectorseek.com/wp-content/uploads/2021/12/Havells-Logo-Vector-01-730x730.jpg', productCount: 200, status: 'Active' },
+  { id: 'br_8', name: 'Philips', logo: 'https://tse2.mm.bing.net/th/id/OIP.isnY6lNbKgGdax0zB0oG5QHaHa?rs=1&pid=ImgDetMain&o=7&rm=3', productCount: 150, status: 'Active' },
+];
+>>>>>>> 1e65977e (connnect)
 
 
 export const MOCK_PRODUCTS: Product[] = [
@@ -14,7 +29,11 @@ export const MOCK_PRODUCTS: Product[] = [
     stock: 25,
     status: 'Active',
     category: 'Home Appliances',
+<<<<<<< HEAD
 
+=======
+    brand: 'Samsung',
+>>>>>>> 1e65977e (connnect)
     rating: 4.5,
     reviews: 128,
     attributes: [
@@ -39,7 +58,11 @@ export const MOCK_PRODUCTS: Product[] = [
     stock: 150,
     status: 'Active',
     category: 'Audio',
+<<<<<<< HEAD
 
+=======
+    brand: 'Sony',
+>>>>>>> 1e65977e (connnect)
     rating: 4.8,
     reviews: 345,
     attributes: [
@@ -65,7 +88,11 @@ export const MOCK_PRODUCTS: Product[] = [
     stock: 10,
     status: 'Active',
     category: 'Computers',
+<<<<<<< HEAD
 
+=======
+    brand: 'Dell',
+>>>>>>> 1e65977e (connnect)
     rating: 4.2,
     reviews: 56,
     attributes: [
@@ -90,7 +117,11 @@ export const MOCK_PRODUCTS: Product[] = [
     stock: 0,
     status: 'Draft',
     category: 'Smart Home',
+<<<<<<< HEAD
 
+=======
+    brand: 'Philips',
+>>>>>>> 1e65977e (connnect)
     rating: 3.9,
     reviews: 22,
     attributes: [
@@ -114,7 +145,11 @@ export const MOCK_PRODUCTS: Product[] = [
     stock: 45,
     status: 'Active',
     category: 'Mobile',
+<<<<<<< HEAD
 
+=======
+    brand: 'Samsung',
+>>>>>>> 1e65977e (connnect)
     rating: 4.7,
     reviews: 890,
     attributes: [
@@ -140,7 +175,11 @@ export const MOCK_PRODUCTS: Product[] = [
     stock: 80,
     status: 'Active',
     category: 'Accessories',
+<<<<<<< HEAD
 
+=======
+    brand: 'HP',
+>>>>>>> 1e65977e (connnect)
     rating: 4.4,
     reviews: 67,
     attributes: [
@@ -524,7 +563,11 @@ export const MOCK_LOCAL_TRIPS: LocalDelivery[] = [
     customerName: 'Karthik M',
     type: 'B2C',
     pickupLocation: 'Store Outlet, T. Nagar',
+<<<<<<< HEAD
     dropLocation: ', Chennai',
+=======
+    dropLocation: 'Mylapore, Chennai',
+>>>>>>> 1e65977e (connnect)
     vehicleType: '2 Wheeler',
     driverName: 'Vikram Malhotra',
     driverPhone: '+91 99887 77665',

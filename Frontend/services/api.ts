@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 const API_BASE_URL = (import.meta as any).env.VITE_API_BASE_URL || "http://localhost:8001";
+=======
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+>>>>>>> 1e65977e (connnect)
 
 export interface LoginRequest {
   email: string;
@@ -38,12 +42,15 @@ class ApiService {
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const token = this.getAuthToken();
+<<<<<<< HEAD
 
     // Normalize base URL and endpoint to avoid double-slashes
     const base = API_BASE_URL.replace(/\/+$/g, "");
     const path = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
     const url = `${base}${path}`;
 
+=======
+>>>>>>> 1e65977e (connnect)
     const headers: HeadersInit = {
       "Content-Type": "application/json",
       ...options.headers,
@@ -53,11 +60,16 @@ class ApiService {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
+<<<<<<< HEAD
     const response = await fetch(url, {
+=======
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+>>>>>>> 1e65977e (connnect)
       ...options,
       headers,
     });
 
+<<<<<<< HEAD
     console.log('📡 API Response:', {
       url: url,
       status: response.status,
@@ -83,6 +95,16 @@ class ApiService {
     }
 
     return data;
+=======
+    if (!response.ok) {
+      const error: ApiError = await response.json().catch(() => ({
+        detail: "An error occurred",
+      }));
+      throw new Error(error.detail || `HTTP error: ${response.status}`);
+    }
+
+    return response.json();
+>>>>>>> 1e65977e (connnect)
   }
 
   /** 🔐 LOGIN */
@@ -98,6 +120,7 @@ class ApiService {
     return response;
   }
 
+<<<<<<< HEAD
   /** 👤 Current Auth User */
   async getCurrentUser(): Promise<UserData> {
     return this.request<UserData>("/api/v1/auth/me");
@@ -117,6 +140,31 @@ class ApiService {
   }
 
   /** ➕ Create User */
+=======
+  /** 👤 CURRENT AUTH USER */
+  async getCurrentUser(): Promise<UserData> {
+    return this.request<UserData>("/api/v1/auth/me");
+  }
+  // async deleteUser(id: number) {
+  //   return this.request<UserData>(`/api/v1/auth/users/${id}`, {
+  //     method: "DELETE"
+  //   })
+  // }
+
+  /** 👥 ALL USERS (Employees + B2B/B2C) */
+  async getUsers(): Promise<UserData[]> {
+    // Fetch employees (Admin/Staff)
+    const employees = await this.request<UserData[]>("/api/v1/employees");
+
+    // Fetch users (B2B/B2C)
+    const users = await this.request<UserData[]>("/api/v1/auth/users");
+
+    // Combine and return
+    return [...employees, ...users];
+  }
+
+  /** ➕ CREATE USER (all go through register for now) */
+>>>>>>> 1e65977e (connnect)
   async createUser(userData: {
     name: string;
     email: string;
@@ -129,6 +177,7 @@ class ApiService {
     pincode?: string;
     permissions?: string[];
   }): Promise<UserData> {
+<<<<<<< HEAD
     const isEmployee = userData.role === "admin" || userData.role === "staff";
     const endpoint = isEmployee
       ? "/api/v1/employees/create"
@@ -136,10 +185,17 @@ class ApiService {
 
     return this.request<UserData>(endpoint, {
       method: "POST",
+=======
+    const isEmployee = userData.role === 'admin' || userData.role === 'staff';
+    const endpoint = isEmployee ? '/api/v1/employees/create' : '/api/v1/auth/register';
+    return this.request<UserData>(endpoint, {
+      method: 'POST',
+>>>>>>> 1e65977e (connnect)
       body: JSON.stringify(userData),
     });
   }
 
+<<<<<<< HEAD
   /** 🗑️ Delete User */
   async deleteUser(id: string, type: string): Promise<void> {
     // ID comes as "Admin-1", we need just "1"
@@ -159,16 +215,23 @@ class ApiService {
   }
 
   /** 🚪 Logout */
+=======
+
+>>>>>>> 1e65977e (connnect)
   logout(): void {
     localStorage.removeItem("auth_token");
     localStorage.removeItem("user");
   }
 
+<<<<<<< HEAD
   /** 🔎 Check Auth State */
+=======
+>>>>>>> 1e65977e (connnect)
   isAuthenticated(): boolean {
     return !!this.getAuthToken();
   }
 
+<<<<<<< HEAD
   // -------------- ADMIN PASSWORD RESET ----------------
 
   /** 🔑 Admin Reset User Password */
@@ -207,6 +270,9 @@ class ApiService {
 
   // -------------- PRODUCT APIs ----------------
 
+=======
+  // Product API Methods
+>>>>>>> 1e65977e (connnect)
   async fetchProducts(): Promise<any[]> {
     return this.request<any[]>("/api/v1/products");
   }
@@ -230,6 +296,7 @@ class ApiService {
       method: "DELETE",
     });
   }
+<<<<<<< HEAD
 
   /** 📦 Import Products from Excel */
   async importProducts(file: File): Promise<{
@@ -480,3 +547,14 @@ export const importProducts = (file: File) =>
 export const updateOrderStatus = (orderId: string, status: string) =>
   apiService.updateOrderStatus(orderId, status);
 
+=======
+}
+
+export const apiService = new ApiService();
+
+// Export product functions for convenience
+export const fetchProducts = () => apiService.fetchProducts();
+export const createProduct = (productData: any) => apiService.createProduct(productData);
+export const updateProduct = (id: string, productData: any) => apiService.updateProduct(id, productData);
+export const deleteProduct = (id: string) => apiService.deleteProduct(id);
+>>>>>>> 1e65977e (connnect)

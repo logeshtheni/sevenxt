@@ -3,17 +3,26 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
+<<<<<<< HEAD
     # Database Configuration (PostgreSQL)
     DB_HOST: str = "localhost"
     DB_PORT: int = 5432  # PostgreSQL default port
     DB_USER: str = "postgres"  # PostgreSQL default user
     DB_PASSWORD: str = "1234"  # Set your PostgreSQL password
+=======
+    # Database Configuration
+    DB_HOST: str = "localhost"
+    DB_PORT: int = 3306
+    DB_USER: str = "root"
+    DB_PASSWORD: str = ""
+>>>>>>> 1e65977e (connnect)
     DB_NAME: str = "sevenext"
     
     # API Configuration
     API_V1_PREFIX: str = "/api/v1"
     SECRET_KEY: str = "your-secret-key-change-in-production-09876543211234567890"
     ALGORITHM: str = "HS256"
+<<<<<<< HEAD
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440 
     
     # CORS Configuration
@@ -31,6 +40,19 @@ class Settings(BaseSettings):
     SENDGRID_FROM_EMAIL: str = "musicmagician92@outlook.com"  # Change to your verified sender email
     SENDGRID_FROM_NAME: str = "sdrarunvarshan"
     
+=======
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440  # 24 hours
+    
+    # CORS Configuration
+    CORS_ORIGINS: list = [
+        "http://localhost:3000", 
+        "http://127.0.0.1:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001"
+    ]
+>>>>>>> 1e65977e (connnect)
     
     class Config:
         env_file = ".env"

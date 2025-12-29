@@ -28,12 +28,16 @@ export interface Product {
   reviews?: number;
   // B2C Offer fields
   b2cOfferPercentage?: number;
+<<<<<<< HEAD
   b2cDiscount?: number; // New field for discount
   b2cOfferPrice?: number; // Calculated Offer Price
+=======
+>>>>>>> 1e65977e (connnect)
   b2cOfferStartDate?: string;
   b2cOfferEndDate?: string;
   // B2B Offer fields
   b2bOfferPercentage?: number;
+<<<<<<< HEAD
   b2bDiscount?: number; // New field for discount
   b2bOfferPrice?: number; // Calculated Offer Price
   b2bOfferStartDate?: string;
@@ -49,6 +53,10 @@ export interface Product {
   breadth?: number; // in cm
   length?: number; // in cm
   createdAt?: string;
+=======
+  b2bOfferStartDate?: string;
+  b2bOfferEndDate?: string;
+>>>>>>> 1e65977e (connnect)
 }
 
 export interface Brand {
@@ -117,7 +125,10 @@ export interface User {
   id: string;
   name: string;
   email: string;
+<<<<<<< HEAD
   phone?: string;
+=======
+>>>>>>> 1e65977e (connnect)
   status: 'Active' | 'Inactive';
   joinDate: string;
   type: 'B2B' | 'B2C' | 'Admin' | 'Staff';

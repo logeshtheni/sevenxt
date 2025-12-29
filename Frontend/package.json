@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+<<<<<<< HEAD
     "@google/genai": "^1.30.0",
     "lucide-react": "^0.554.0",
     "react": "^19.2.0",
@@ -16,6 +17,13 @@
     "react-dom": "^19.2.0",
     "recharts": "^3.4.1",
     "xlsx": "^0.18.5"
+=======
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "@google/genai": "^1.30.0",
+    "lucide-react": "^0.554.0",
+    "recharts": "^3.4.1"
+>>>>>>> 1e65977e (connnect)
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

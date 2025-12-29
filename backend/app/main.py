@@ -5,11 +5,14 @@ from app.modules.auth import routes as auth_routes
 from app.database import engine, Base
 import logging
 
+<<<<<<< HEAD
 # Import models to register them with Base
 from app.modules.refunds.models import Refund
 from app.modules.activity_logs.models import ActivityLog
 from app.modules.exchanges.models import Exchange
 
+=======
+>>>>>>> 1e65977e (connnect)
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -27,6 +30,7 @@ async def startup_event():
         # Create database tables (only if they don't exist)
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables created/verified successfully")
+<<<<<<< HEAD
         
         # Start background task to check expired offers
         import asyncio
@@ -34,6 +38,8 @@ async def startup_event():
         asyncio.create_task(check_expired_offers())
         logger.info("Started background task for offer expiration")
         
+=======
+>>>>>>> 1e65977e (connnect)
     except Exception as e:
         logger.error(f"Failed to connect to database: {e}")
         logger.warning("Application started but database is not available. Please ensure MySQL is running.")
@@ -41,16 +47,21 @@ async def startup_event():
 # CORS Configuration
 app.add_middleware(
     CORSMiddleware,
+<<<<<<< HEAD
     allow_origins=[
         "http://localhost:3000",   # React
         "http://localhost:5173",   # Vite (just in case)
     ],
+=======
+    allow_origins=settings.CORS_ORIGINS,
+>>>>>>> 1e65977e (connnect)
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 from app.modules.products import routes as product_routes
+<<<<<<< HEAD
 from app.modules.orders import routes as order_routes
 
 # Include Routers
@@ -83,6 +94,13 @@ from fastapi.staticfiles import StaticFiles
 import os
 os.makedirs("uploads", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+=======
+
+# Include Routers
+app.include_router(auth_routes.router, prefix=settings.API_V1_PREFIX)
+app.include_router(auth_routes.employees_router, prefix=settings.API_V1_PREFIX)
+app.include_router(product_routes.router, prefix=settings.API_V1_PREFIX)
+>>>>>>> 1e65977e (connnect)
 
 @app.get("/")
 def root():
