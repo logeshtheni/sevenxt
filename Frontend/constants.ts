@@ -524,7 +524,7 @@ export const MOCK_LOCAL_TRIPS: LocalDelivery[] = [
     customerName: 'Karthik M',
     type: 'B2C',
     pickupLocation: 'Store Outlet, T. Nagar',
-    dropLocation: 'Mylapore, Chennai',
+    dropLocation: ', Chennai',
     vehicleType: '2 Wheeler',
     driverName: 'Vikram Malhotra',
     driverPhone: '+91 99887 77665',

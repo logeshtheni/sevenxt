@@ -1,28 +1,18 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { 
-  Search, Eye, Download, ShoppingBag, Printer, X, CreditCard, MapPin, Phone, Mail, ArrowLeft, Calendar, PlayCircle
+import {
+  Search, Eye, Download, ShoppingBag, Printer, X, CreditCard, MapPin, Phone, Mail, ArrowLeft, Calendar, PlayCircle, CheckCircle, Package
 } from 'lucide-react';
+import Barcode from 'react-barcode';
+
 import logo from '../assets/logo.jpg';
-// Mock Data (Local to ensure type safety with amount as number for calculations)
-const MOCK_ORDERS = [
-  { id: 'ORD-7001', customer: 'TechCorp Solutions', date: 'May 14, 2024', amount: 4500.00, items: 12, status: 'Processing', payment: 'Paid', type: 'B2B', email: 'accounts@techcorp.com', address: 'Tech Park, Sector 4, Bangalore' },
-  { id: 'ORD-7002', customer: 'Alice Freeman', date: 'May 13, 2024', amount: 129.99, items: 1, status: 'On the way', payment: 'Paid', type: 'B2C', email: 'alice.f@gmail.com', address: '123 Maple Drive, Mumbai' },
-  { id: 'ORD-7003', customer: 'John Doe', date: 'May 12, 2024', amount: 45.50, items: 2, status: 'Delivered', payment: 'Paid', type: 'B2C', email: 'john.d@yahoo.com', address: '45 Park Avenue, Delhi' },
-  { id: 'ORD-7004', customer: 'Global Logistics', date: 'May 11, 2024', amount: 1200.50, items: 5, status: 'Pending', payment: 'Unpaid', type: 'B2B', email: 'logistics@global.com', address: 'Warehouse 9, Chennai Port' },
-  { id: 'ORD-7005', customer: 'Sarah Jenkins', date: 'May 10, 2024', amount: 899.00, items: 1, status: 'Cancelled', payment: 'Refunded', type: 'B2C', email: 'sarah.j@outlook.com', address: '78 Hilltop View, Pune' },
-  { id: 'ORD-7006', customer: 'Wayne Enterprises', date: 'May 14, 2024', amount: 25000.00, items: 50, status: 'Confirmed', payment: 'Paid', type: 'B2B', email: 'procurement@wayne.com', address: 'Gotham Tower, Mumbai' },
-  { id: 'ORD-7007', customer: 'Peter Parker', date: 'May 14, 2024', amount: 25.00, items: 1, status: 'Pickup', payment: 'Paid', type: 'B2C', email: 'p.parker@dailybugle.com', address: '20 Ingram St, Queens' },
-  { id: 'ORD-7008', customer: 'Stark Ind', date: 'May 14, 2024', amount: 9999.00, items: 10, status: 'On the way', payment: 'Paid', type: 'B2B', email: 'tony@stark.com', address: 'Malibu Point, Goa' },
-  { id: 'ORD-7009', customer: 'Bruce Banner', date: 'April 20, 2024', amount: 150.00, items: 3, status: 'Delivered', payment: 'Paid', type: 'B2C', email: 'bruce@hulk.com', address: 'Green St, Dayton' },
-  { id: 'ORD-7010', customer: 'Clark Kent', date: 'January 15, 2023', amount: 55.00, items: 1, status: 'Delivered', payment: 'Paid', type: 'B2C', email: 'ck@dailyplanet.com', address: 'Metropolis' },
-];
+import { apiService } from '../services/api';
 
 const STATUS_TABS = [
   'All Orders',
   'Confirmed',
   'Processing',
-  'Pickup',
+  'Ready to Pickup',
   'On the way',
   'Delivered',
   'Cancelled'
@@ -33,15 +23,183 @@ interface OrdersViewProps {
 }
 
 export const OrdersView: React.FC<OrdersViewProps> = ({ initialSearchTerm = '' }) => {
-  const [orders, setOrders] = useState(MOCK_ORDERS);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [activeStatus, setActiveStatus] = useState('All Orders');
   const [searchTerm, setSearchTerm] = useState(initialSearchTerm);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
-  
+
+  // Bulk Selection State
+  const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
+
+  // Dimensions Modal State
+  const [dimensionsModalOpen, setDimensionsModalOpen] = useState(false);
+  const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
+  const [dimensionsData, setDimensionsData] = useState({ height: '', weight: '', breadth: '', length: '' });
+
+  // Pickup Time State
+  const [pickupTimes, setPickupTimes] = useState<Record<string, string>>({});
+
   // Date Filters
   const [filterDate, setFilterDate] = useState('');
   const [filterMonth, setFilterMonth] = useState('');
   const [filterYear, setFilterYear] = useState('');
+
+  // Fetch Orders
+  useEffect(() => {
+    if (activeStatus === 'Ready to Pickup') {
+      fetchDeliveries();
+    } else {
+      fetchOrders();
+    }
+  }, [activeStatus]);
+
+  const fetchDeliveries = async () => {
+    try {
+      setLoading(true);
+      const data = await apiService.fetchDeliveries();
+
+      const mappedDeliveries = data.map(d => {
+        // Parse item_name string back to productList structure
+        // Format: "Item A x2, Item B x1"
+        const parsedProducts = d.item_name ? d.item_name.split(', ').map((itemStr: string) => {
+          const lastXIndex = itemStr.lastIndexOf(' x');
+          if (lastXIndex !== -1) {
+            return {
+              name: itemStr.substring(0, lastXIndex),
+              quantity: parseInt(itemStr.substring(lastXIndex + 2)) || 1
+            };
+          }
+          return { name: itemStr, quantity: 1 };
+        }) : [];
+
+        return {
+          id: d.order_number || `ORD-${d.order_id}`,
+          deliveryId: d.id, // Actual delivery ID for API calls
+          customer: d.customer_name,
+          date: new Date(d.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+          amount: parseFloat(d.amount),
+          payment: d.payment,
+          items: d.quantity,
+          productList: parsedProducts,
+          status: d.delivery_status || 'Ready to Pickup', // Use actual status from DB
+          type: 'Delivery', // or fetch from order if needed
+          email: '', // Not in delivery table
+          phone: d.phone,
+          address: d.full_address,
+          height: d.height,
+          weight: d.weight,
+          breadth: d.breadth,
+          length: d.length,
+          schedule_pickup: d.schedule_pickup,
+          awb_label_path: d.awb_label_path,
+          awb_number: d.awb_number, // AWB number for barcode
+          rawDate: d.created_at
+        };
+      });
+
+      setOrders(prevOrders => {
+        const deliveryMap = new Map(mappedDeliveries.map((d: any) => [d.id, d]));
+
+        // If we have existing orders, merge delivery info
+        if (prevOrders.length > 0) {
+          return prevOrders.map(order => {
+            if (deliveryMap.has(order.id)) {
+              const delivery = deliveryMap.get(order.id);
+              return {
+                ...order,
+                ...delivery,
+                type: order.type, // Preserve original customer type
+                status: delivery.status // Prioritize delivery status
+              };
+            }
+            return order;
+          });
+        }
+
+        // Fallback if no orders loaded yet (though fetchOrders usually runs first)
+        return mappedDeliveries;
+      });
+    } catch (error) {
+      console.error("Failed to fetch deliveries:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchOrders = async () => {
+    try {
+      setLoading(true);
+      const data = await apiService.fetchOrders();
+
+      // Map API data to UI format
+      const mappedOrders = data.map(order => {
+        let parsedProducts = [];
+        try {
+          if (typeof order.products === 'object' && order.products !== null) {
+            // It's already parsed (likely by the backend or DB driver)
+            parsedProducts = order.products;
+          } else if (typeof order.products === 'string') {
+            // Try standard JSON parse
+            parsedProducts = JSON.parse(order.products || '[]');
+          } else {
+            parsedProducts = [];
+          }
+
+          // Ensure it's an array (handle case where it's a single object)
+          if (parsedProducts && typeof parsedProducts === 'object' && !Array.isArray(parsedProducts)) {
+            parsedProducts = [parsedProducts];
+          }
+        } catch (e) {
+          try {
+            // Try replacing single quotes with double quotes (common if data was saved as Python string)
+            // Also handle Decimal('...') which might appear in Python string dumps
+            let fixedJson = (order.products as string)
+              .replace(/'/g, '"')
+              .replace(/None/g, 'null')
+              .replace(/False/g, 'false')
+              .replace(/True/g, 'true')
+              .replace(/Decimal\("([^"]+)"\)/g, '$1') // Handle Decimal("10.00")
+              .replace(/Decimal\('([^']+)'\)/g, '$1'); // Handle Decimal('10.00')
+
+            parsedProducts = JSON.parse(fixedJson);
+          } catch (e2) {
+            console.error("Failed to parse products JSON:", order.products);
+            parsedProducts = [];
+          }
+        }
+
+        return {
+          id: order.order_id,
+          customer: order.customer_name || `User #${order.user_id || 'Unknown'}`, // Use customer_name from API
+          date: new Date(order.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+          amount: parseFloat(order.amount),
+          payment: order.payment || 'Unpaid',
+          items: parsedProducts.length || 1,
+          productList: parsedProducts, // Store the actual product list
+          status: (order.status && order.status.charAt(0).toUpperCase() + order.status.slice(1).toLowerCase()) || 'Pending',
+          type: order.customer_type || 'B2C',
+          email: order.email,
+          phone: order.phone,
+          address: order.address,
+          height: order.height,
+          weight: order.weight,
+          breadth: order.breadth,
+          length: order.length,
+          awb_number: order.awb_number, // AWB number for barcode
+
+          rawDate: order.created_at // Keep raw date for sorting
+
+        };
+      });
+
+      setOrders(mappedOrders);
+    } catch (error) {
+      console.error("Failed to fetch orders:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Sync with global search prop
   useEffect(() => {
@@ -59,26 +217,28 @@ export const OrdersView: React.FC<OrdersViewProps> = ({ initialSearchTerm = '' }
   // Filter Logic
   const filteredOrders = orders.filter(order => {
     const orderDate = new Date(order.date);
-    const matchesStatus = activeStatus === 'All Orders' || order.status === activeStatus;
+    const matchesStatus = activeStatus === 'All Orders'
+      || order.status === activeStatus
+      || (activeStatus === 'Ready to Pickup' && (order.status === 'Pickup Time Scheduled' || order.status === 'AWB Generated'));
     const matchesSearch = order.id.toLowerCase().includes(searchTerm.toLowerCase()) || order.customer.toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     // Date Logic
     let matchesDate = true;
-    
+
     if (filterDate) {
-        // Exact Date Match
-        const selDate = new Date(filterDate);
-        matchesDate = orderDate.getDate() === selDate.getDate() &&
-                      orderDate.getMonth() === selDate.getMonth() &&
-                      orderDate.getFullYear() === selDate.getFullYear();
+      // Exact Date Match
+      const selDate = new Date(filterDate);
+      matchesDate = orderDate.getDate() === selDate.getDate() &&
+        orderDate.getMonth() === selDate.getMonth() &&
+        orderDate.getFullYear() === selDate.getFullYear();
     } else {
-        // Month & Year Logic
-        if (filterMonth) {
-            matchesDate = matchesDate && orderDate.getMonth() === parseInt(filterMonth);
-        }
-        if (filterYear) {
-            matchesDate = matchesDate && orderDate.getFullYear() === parseInt(filterYear);
-        }
+      // Month & Year Logic
+      if (filterMonth) {
+        matchesDate = matchesDate && orderDate.getMonth() === parseInt(filterMonth);
+      }
+      if (filterYear) {
+        matchesDate = matchesDate && orderDate.getFullYear() === parseInt(filterYear);
+      }
     }
 
     return matchesStatus && matchesSearch && matchesDate;
@@ -86,7 +246,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({ initialSearchTerm = '' }
 
   // Group Orders by Date
   const groupedOrders = useMemo(() => {
-    const groups: Record<string, typeof MOCK_ORDERS> = {};
+    const groups: Record<string, any[]> = {};
     filteredOrders.forEach(order => {
       if (!groups[order.date]) {
         groups[order.date] = [];
@@ -100,12 +260,17 @@ export const OrdersView: React.FC<OrdersViewProps> = ({ initialSearchTerm = '' }
   const sortedDates = Object.keys(groupedOrders).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
 
   const getStatusColor = (status: string) => {
-    switch(status) {
+    switch (status) {
       case 'Delivered': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
       case 'On the way': return 'bg-blue-100 text-blue-700 border-blue-200';
       case 'Processing': return 'bg-indigo-100 text-indigo-700 border-indigo-200';
       case 'Confirmed': return 'bg-violet-100 text-violet-700 border-violet-200';
-      case 'Pickup': return 'bg-amber-100 text-amber-700 border-amber-200';
+      case 'Ready to Pickup':
+      case 'AWB Generated':
+        return 'bg-amber-100 text-amber-700 border-amber-200';
+      case 'Pickup Time Scheduled':
+        return 'bg-purple-100 text-purple-700 border-purple-200';
+      case 'Pickup': return 'bg-amber-100 text-amber-700 border-amber-200'; // Fallback
       case 'Pending': return 'bg-orange-100 text-orange-700 border-orange-200';
       case 'Cancelled': return 'bg-rose-100 text-rose-700 border-rose-200';
       default: return 'bg-slate-100 text-slate-700 border-slate-200';
@@ -144,16 +309,152 @@ export const OrdersView: React.FC<OrdersViewProps> = ({ initialSearchTerm = '' }
   };
 
   const clearDateFilters = () => {
-      setFilterDate('');
-      setFilterMonth('');
-      setFilterYear('');
+    setFilterDate('');
+    setFilterMonth('');
+    setFilterYear('');
   };
 
   const handleProcessOrder = (orderId: string) => {
-    setOrders(prevOrders => prevOrders.map(order => 
+    setOrders(prevOrders => prevOrders.map(order =>
       order.id === orderId ? { ...order, status: 'Processing' } : order
     ));
   };
+
+  const handleConfirmOrder = async (orderId: string) => {
+    try {
+      await apiService.updateOrderStatus(orderId, 'Confirmed');
+      setOrders(prevOrders => prevOrders.map(order =>
+        order.id === orderId ? { ...order, status: 'Confirmed' } : order
+      ));
+    } catch (error) {
+      console.error("Failed to confirm order:", error);
+      alert("Failed to confirm order. Please try again.");
+    }
+  };
+
+  const openDimensionsModal = (orderId: string, existingData?: any) => {
+    setCurrentOrderId(orderId);
+    if (existingData) {
+      setDimensionsData({
+        height: existingData.height || '',
+        weight: existingData.weight || '',
+        breadth: existingData.breadth || '',
+        length: existingData.length || ''
+      });
+    } else {
+      setDimensionsData({ height: '', weight: '', breadth: '', length: '' });
+    }
+    setDimensionsModalOpen(true);
+  };
+
+  const handleDimensionsSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentOrderId) return;
+
+    try {
+      await apiService.updateOrderDimensions(currentOrderId, {
+        height: parseFloat(dimensionsData.height),
+        weight: parseFloat(dimensionsData.weight),
+        breadth: parseFloat(dimensionsData.breadth),
+        length: parseFloat(dimensionsData.length)
+      });
+
+      // Update local state
+      setOrders(prevOrders => prevOrders.map(order =>
+        order.id === currentOrderId ? {
+          ...order,
+          height: parseFloat(dimensionsData.height),
+          weight: parseFloat(dimensionsData.weight),
+          breadth: parseFloat(dimensionsData.breadth),
+          length: parseFloat(dimensionsData.length)
+        } : order
+      ));
+
+      setDimensionsModalOpen(false);
+    } catch (error) {
+      console.error("Failed to update dimensions:", error);
+      alert("Failed to update dimensions. Please try again.");
+    }
+  };
+
+  const handleProcessToDelivery = async (orderId: string) => {
+    try {
+      await apiService.updateOrderStatus(orderId, 'Processing');
+      setOrders(prevOrders => prevOrders.map(order =>
+        order.id === orderId ? { ...order, status: 'Processing' } : order
+      ));
+    } catch (error) {
+      console.error("Failed to process order:", error);
+    }
+  };
+
+  const handlePickupOrder = async (orderId: string) => {
+    try {
+      await apiService.updateOrderStatus(orderId, 'Ready to Pickup');
+      setOrders(prevOrders => prevOrders.map(order =>
+        order.id === orderId ? { ...order, status: 'Ready to Pickup' } : order
+      ));
+    } catch (error) {
+      console.error("Failed to move to pickup:", error);
+      alert("Failed to move order to pickup. Please try again.");
+    }
+  };
+
+  // Bulk Selection Functions
+  const toggleOrderSelection = (orderId: string) => {
+    setSelectedOrders(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(orderId)) {
+        newSet.delete(orderId);
+      } else {
+        newSet.add(orderId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedOrders.size === filteredOrders.length) {
+      setSelectedOrders(new Set());
+    } else {
+      setSelectedOrders(new Set(filteredOrders.map(o => o.id)));
+    }
+  };
+
+  const downloadBulkAWBLabels = async () => {
+    const ordersWithLabels = orders.filter(o =>
+      selectedOrders.has(o.id) && o.awb_label_path
+    );
+
+    if (ordersWithLabels.length === 0) {
+      alert('No AWB labels available for selected orders');
+      return;
+    }
+
+    try {
+      // Get order IDs
+      const orderIds: string[] = Array.from(selectedOrders);
+
+      // Call backend to merge PDFs
+      const blob = await apiService.bulkDownloadAWBLabels(orderIds);
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `AWB_Labels_Bulk_${new Date().toISOString().slice(0, 10)}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      alert(`Downloaded ${ordersWithLabels.length} AWB labels in a single PDF`);
+    } catch (error) {
+      console.error('Error downloading bulk AWB labels:', error);
+      alert('Failed to download AWB labels. Please try again.');
+    }
+  };
+
 
   return (
     <div className="flex flex-col h-full bg-slate-50 -m-4 sm:-m-6 lg:-m-8 font-sans overflow-hidden relative">
@@ -191,98 +492,135 @@ export const OrdersView: React.FC<OrdersViewProps> = ({ initialSearchTerm = '' }
       {/* Toolbar */}
       <div className="px-6 py-4 flex flex-col gap-4 shrink-0 bg-slate-50 border-b border-slate-200">
         <div className="flex items-center justify-between gap-4">
-            <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                <input 
-                    type="text" 
-                    placeholder="Search by Order ID or Customer..."
-                    className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm text-gray-900"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                />
-            </div>
-            <div className="flex items-center gap-2">
-                <button 
-                    onClick={downloadCSV}
-                    className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 text-sm font-medium hover:bg-slate-50"
-                >
-                    <Download size={16} />
-                    Export
-                </button>
-            </div>
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <input
+              type="text"
+              placeholder="Search by Order ID or Customer..."
+              className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm text-gray-900"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            {activeStatus === 'Ready to Pickup' && selectedOrders.size > 0 && (
+              <button
+                onClick={downloadBulkAWBLabels}
+                className="flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white border border-indigo-600 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+              >
+                <Download size={16} />
+                Download AWB Labels ({selectedOrders.size})
+              </button>
+            )}
+            <button
+              onClick={downloadCSV}
+              className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 text-sm font-medium hover:bg-slate-50"
+            >
+              <Download size={16} />
+              Export
+            </button>
+          </div>
         </div>
 
         {/* Date Filters */}
         <div className="flex flex-wrap items-center gap-3">
-            {/* Specific Date */}
-            <div className="flex items-center bg-white border border-slate-200 rounded-lg px-2 py-1.5 shadow-sm">
-                <span className="text-xs text-slate-500 mr-2 font-medium">Date:</span>
-                <input 
-                    type="date" 
-                    value={filterDate}
-                    onChange={(e) => {
-                        setFilterDate(e.target.value);
-                        setFilterMonth(''); 
-                        setFilterYear('');
-                    }}
-                    className="text-sm outline-none text-slate-700 bg-transparent border-none focus:ring-0 h-5"
-                />
-            </div>
+          {/* Specific Date */}
+          <div className="flex items-center bg-white border border-slate-200 rounded-lg px-2 py-1.5 shadow-sm">
+            <span className="text-xs text-slate-500 mr-2 font-medium">Date:</span>
+            <input
+              type="date"
+              value={filterDate}
+              onChange={(e) => {
+                setFilterDate(e.target.value);
+                setFilterMonth('');
+                setFilterYear('');
+              }}
+              className="text-sm outline-none text-slate-700 bg-transparent border-none focus:ring-0 h-5"
+            />
+          </div>
 
-            <span className="text-xs text-slate-400 font-medium">OR</span>
+          <span className="text-xs text-slate-400 font-medium">OR</span>
 
-            {/* Month */}
-            <select 
-                value={filterMonth}
-                onChange={(e) => {
-                    setFilterMonth(e.target.value);
-                    setFilterDate(''); 
-                }}
-                className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 outline-none shadow-sm focus:border-indigo-500"
+          {/* Month */}
+          <select
+            value={filterMonth}
+            onChange={(e) => {
+              setFilterMonth(e.target.value);
+              setFilterDate('');
+            }}
+            className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 outline-none shadow-sm focus:border-indigo-500"
+          >
+            <option value="">All Months</option>
+            {Array.from({ length: 12 }, (_, i) => (
+              <option key={i} value={i}>{new Date(0, i).toLocaleString('default', { month: 'long' })}</option>
+            ))}
+          </select>
+
+          {/* Year */}
+          <select
+            value={filterYear}
+            onChange={(e) => {
+              setFilterYear(e.target.value);
+              setFilterDate('');
+            }}
+            className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 outline-none shadow-sm focus:border-indigo-500"
+          >
+            <option value="">All Years</option>
+            {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+
+          {/* Clear Filters */}
+          {(filterDate || filterMonth || filterYear) && (
+            <button
+              onClick={clearDateFilters}
+              className="text-xs text-red-600 hover:text-red-800 hover:underline ml-auto sm:ml-0 flex items-center gap-1"
             >
-                <option value="">All Months</option>
-                {Array.from({length: 12}, (_, i) => (
-                    <option key={i} value={i}>{new Date(0, i).toLocaleString('default', { month: 'long' })}</option>
-                ))}
-            </select>
-
-            {/* Year */}
-            <select 
-                value={filterYear}
-                onChange={(e) => {
-                    setFilterYear(e.target.value);
-                    setFilterDate('');
-                }}
-                className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 outline-none shadow-sm focus:border-indigo-500"
-            >
-                <option value="">All Years</option>
-                {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
-            </select>
-
-            {/* Clear Filters */}
-            {(filterDate || filterMonth || filterYear) && (
-                <button 
-                    onClick={clearDateFilters}
-                    className="text-xs text-red-600 hover:text-red-800 hover:underline ml-auto sm:ml-0 flex items-center gap-1"
-                >
-                    <X size={12} /> Clear Filters
-                </button>
-            )}
+              <X size={12} /> Clear Filters
+            </button>
+          )}
         </div>
       </div>
 
       {/* Table */}
       <div className="flex-1 overflow-y-auto px-6 pb-8 pt-4">
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <table className="w-full text-left border-collapse">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+          <table className="w-full text-left border-collapse min-w-max">
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-200">
+                {activeStatus === 'Ready to Pickup' && (
+                  <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider w-12">
+                    <input
+                      type="checkbox"
+                      checked={selectedOrders.size === filteredOrders.length && filteredOrders.length > 0}
+                      onChange={toggleSelectAll}
+                      className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
+                    />
+                  </th>
+                )}
                 <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Order ID</th>
                 <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Customer</th>
-                <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Amount</th>
-                <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Payment</th>
+                {activeStatus !== 'Ready to Pickup' && (
+                  <>
+                    <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Amount</th>
+                    <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Payment</th>
+                  </>
+                )}
                 <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider text-center">Process</th>
+                {(activeStatus === 'Processing' || activeStatus === 'Confirmed' || activeStatus === 'Ready to Pickup') && (
+                  <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider min-w-[140px]">Dimensions</th>
+                )}
+                {activeStatus === 'Ready to Pickup' && (
+                  <>
+                    <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider min-w-[200px]">Contact</th>
+                    <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider min-w-[150px]">Items</th>
+                    <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider text-center">AWB Label</th>
+                  </>
+                )}
+                {activeStatus === 'Ready to Pickup' ? (
+                  <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider text-center">Schedule Pickup Time</th>
+                ) : (
+                  <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider text-center">Process</th>
+                )}
                 <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider text-center">Invoice</th>
               </tr>
             </thead>
@@ -290,46 +628,243 @@ export const OrdersView: React.FC<OrdersViewProps> = ({ initialSearchTerm = '' }
               {sortedDates.map(date => (
                 <React.Fragment key={date}>
                   <tr className="bg-gray-50 border-b border-gray-100">
-                    <td colSpan={7} className="py-2 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                    <td colSpan={10} className="py-2 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
                       <Calendar size={12} /> {date}
                     </td>
                   </tr>
                   {groupedOrders[date].map((order) => (
                     <tr key={order.id} className="hover:bg-slate-50/80 transition-colors group">
+                      {activeStatus === 'Ready to Pickup' && (
+                        <td className="py-4 px-6">
+                          <input
+                            type="checkbox"
+                            checked={selectedOrders.has(order.id)}
+                            onChange={() => toggleOrderSelection(order.id)}
+                            className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
+                          />
+                        </td>
+                      )}
                       <td className="py-4 px-6 font-medium text-indigo-600 text-sm">{order.id}</td>
                       <td className="py-4 px-6 text-sm text-slate-900">
-                        {order.customer}
-                        <div className="text-[10px] text-slate-400 uppercase">{order.type}</div>
+                        <div className="flex items-center gap-2">
+                          <span>{order.customer}</span>
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${order.type === 'B2B'
+                            ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                            : 'bg-green-100 text-green-700 border border-green-200'
+                            }`} title={`Customer name fetched from ${order.type} Applications table`}>
+                            {order.type}
+                          </span>
+                        </div>
                       </td>
-                      <td className="py-4 px-6 text-sm font-bold text-slate-900">₹{order.amount.toLocaleString()}</td>
-                      <td className="py-4 px-6">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                          order.payment === 'Paid' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
-                        }`}>
-                          {order.payment}
-                        </span>
-                      </td>
+                      {activeStatus !== 'Ready to Pickup' && (
+                        <>
+                          <td className="py-4 px-6 text-sm font-bold text-slate-900">₹{order.amount.toLocaleString()}</td>
+                          <td className="py-4 px-6">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${order.payment === 'Paid' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+                              }`}>
+                              {order.payment}
+                            </span>
+                          </td>
+                        </>
+                      )}
                       <td className="py-4 px-6">
                         <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${getStatusColor(order.status)}`}>
                           {order.status}
                         </span>
                       </td>
+                      {(activeStatus === 'Processing' || activeStatus === 'Confirmed' || activeStatus === 'Ready to Pickup') && (
+                        <td className="py-4 px-6">
+                          {(order.height || order.weight || order.breadth || order.length) ? (
+                            <div className="relative group/dim">
+                              <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] text-slate-600">
+                                <div title="Height"><span className="text-slate-400 font-medium">H:</span> {order.height}</div>
+                                <div title="Weight"><span className="text-slate-400 font-medium">W:</span> {order.weight}</div>
+                                <div title="Breadth"><span className="text-slate-400 font-medium">B:</span> {order.breadth}</div>
+                                <div title="Length"><span className="text-slate-400 font-medium">L:</span> {order.length}</div>
+                              </div>
+                              <button
+                                onClick={() => openDimensionsModal(order.id, order)}
+                                className="absolute -top-2 -right-2 p-1 bg-white border border-slate-200 rounded-full text-slate-400 hover:text-indigo-600 hover:border-indigo-200 shadow-sm opacity-0 group-hover/dim:opacity-100 transition-all"
+                                title="Edit Dimensions"
+                              >
+                                <div className="w-3 h-3">
+                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /><path d="m15 5 4 4" /></svg>
+                                </div>
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-slate-300 text-xs">-</span>
+                          )}
+                        </td>
+                      )}
+                      {activeStatus === 'Ready to Pickup' && (
+                        <>
+                          <td className="py-4 px-6 text-sm text-slate-600">
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center gap-1.5" title="Phone">
+                                <Phone size={12} className="text-slate-400" />
+                                <span>{order.phone || '-'}</span>
+                              </div>
+                              <div className="flex items-start gap-1.5" title="Address">
+                                <MapPin size={12} className="text-slate-400 mt-0.5 shrink-0" />
+                                <span className="line-clamp-2 text-xs">{order.address || '-'}</span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-4 px-6 text-sm text-slate-600">
+                            <div className="flex flex-col gap-1 max-h-[60px] overflow-y-auto custom-scrollbar">
+                              {order.productList && order.productList.length > 0 ? (
+                                order.productList.map((item: any, idx: number) => (
+                                  <div key={idx} className="flex justify-between items-center text-xs border-b border-slate-100 last:border-0 pb-1 last:pb-0">
+                                    <span className="truncate max-w-[100px]" title={item.name || item.product_name || item.product}>{item.name || item.product_name || item.product || `Item #${idx + 1}`}</span>
+                                    <span className="font-semibold bg-slate-100 px-1.5 rounded text-[10px]">x{item.quantity || item.qty || 1}</span>
+                                  </div>
+                                ))
+                              ) : (
+                                <span className="text-slate-400 text-xs">No items</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-4 px-6 text-center">
+                            {order.awb_label_path ? (
+                              <a
+                                href={`${(import.meta as any).env.VITE_API_BASE_URL || "http://localhost:8001"}${order.awb_label_path}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-200 transition-colors border border-slate-200"
+                              >
+                                <Download size={14} /> Download
+                              </a>
+                            ) : (
+                              <span className="text-slate-300 text-[10px]">-</span>
+                            )}
+                          </td>
+                        </>
+                      )}
                       <td className="py-4 px-6 text-center">
                         {order.status === 'Confirmed' ? (
-                            <button 
-                              onClick={() => handleProcessOrder(order.id)}
-                              className="flex items-center justify-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-sm w-full max-w-[100px] mx-auto"
-                              title="Move to Processing"
-                            >
-                              <PlayCircle size={14} /> Process
-                            </button>
+                          // Logic for Confirmed Orders
+                          activeStatus === 'Confirmed' ? (
+                            // In Confirmed Tab: Show Add Dimensions / Process Logic
+                            (order.height && order.weight && order.breadth && order.length) ? (
+                              <button
+                                onClick={() => handleProcessToDelivery(order.id)}
+                                className="flex items-center justify-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-sm w-full max-w-[140px] mx-auto"
+                                title="Process to Delivery"
+                              >
+                                <PlayCircle size={14} /> Process to Delivery
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => openDimensionsModal(order.id)}
+                                className="flex items-center justify-center gap-1 px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 transition-colors shadow-sm w-full max-w-[140px] mx-auto"
+                                title="Add Dimensions"
+                              >
+                                <Package size={14} /> Add Dimensions
+                              </button>
+                            )
+                          ) : (
+                            // In All Orders (or other tabs): Just show "Order Confirmed" badge
+                            <span className="flex items-center justify-center gap-1 px-3 py-1.5 bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-lg border border-emerald-200 w-full max-w-[140px] mx-auto">
+                              <CheckCircle size={14} /> Order Confirmed
+                            </span>
+                          )
+                        ) : order.status === 'Processing' ? (
+                          <button
+                            onClick={() => handlePickupOrder(order.id)}
+                            className="flex items-center justify-center gap-1 px-3 py-1.5 bg-amber-600 text-white text-xs font-semibold rounded-lg hover:bg-amber-700 transition-colors shadow-sm w-full max-w-[140px] mx-auto"
+                            title="Move to Pickup"
+                          >
+                            <Package size={14} /> Move to Pickup
+                          </button>
+                        ) : order.status === 'Ready to Pickup' || order.status === 'Pickup Time Scheduled' || order.status === 'AWB Generated' ? (
+                          <div className="flex flex-col gap-1.5 w-full max-w-[160px] mx-auto">
+                            {order.status === 'Pickup Time Scheduled' ? (
+                              <div className="flex flex-col items-center gap-1">
+                                <span className="text-[10px] font-medium text-purple-600 bg-purple-50 px-2 py-1 rounded border border-purple-100 w-full text-center">
+                                  Scheduled: {new Date(order.schedule_pickup).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                                </span>
+                                <div className="relative w-full">
+                                  <input
+                                    type="datetime-local"
+                                    value={pickupTimes[order.id] || (order.schedule_pickup ? new Date(order.schedule_pickup).toISOString().slice(0, 16) : '')}
+                                    onChange={(e) => setPickupTimes({ ...pickupTimes, [order.id]: e.target.value })}
+                                    className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] text-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20"
+                                  />
+                                </div>
+                                <button
+                                  onClick={async () => {
+                                    const time = pickupTimes[order.id];
+                                    if (!time) return;
+                                    try {
+                                      console.log('Rescheduling pickup for delivery ID:', order.deliveryId, 'Time:', time);
+                                      await apiService.updateDeliverySchedule(order.deliveryId, time);
+                                      alert('Pickup rescheduled successfully!');
+                                      fetchDeliveries();
+                                    } catch (error) {
+                                      console.error("Failed to reschedule pickup:", error);
+                                      alert('Failed to reschedule pickup');
+                                    }
+                                  }}
+                                  className="w-full flex items-center justify-center gap-1 px-3 py-1.5 bg-purple-600 text-white text-xs font-semibold rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
+                                >
+                                  <Calendar size={12} /> Reschedule
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="relative">
+                                  <input
+                                    type="datetime-local"
+                                    value={pickupTimes[order.id] || ''}
+                                    onChange={(e) => setPickupTimes({ ...pickupTimes, [order.id]: e.target.value })}
+                                    className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] text-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20"
+                                  />
+                                </div>
+                                <button
+                                  onClick={async () => {
+                                    const time = pickupTimes[order.id];
+                                    if (!time) return;
+                                    try {
+                                      console.log('Scheduling pickup for delivery ID:', order.deliveryId, 'Time:', time);
+                                      await apiService.updateDeliverySchedule(order.deliveryId, time);
+
+                                      // Optimistic update
+                                      setOrders(prev => prev.map(o =>
+                                        o.id === order.id
+                                          ? { ...o, status: 'Pickup Time Scheduled', schedule_pickup: time }
+                                          : o
+                                      ));
+
+                                      alert('Pickup scheduled successfully!');
+                                      fetchDeliveries();
+                                    } catch (error) {
+                                      console.error("Failed to schedule pickup:", error);
+                                      alert('Failed to schedule pickup');
+                                    }
+                                  }}
+                                  className="w-full flex items-center justify-center gap-1 px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+                                >
+                                  <Calendar size={12} /> Schedule Pickup
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        ) : (order.status === 'Pending' || order.status === 'New' || order.status === 'Created') ? (
+                          <button
+                            onClick={() => handleConfirmOrder(order.id)}
+                            className="flex items-center justify-center gap-1 px-3 py-1.5 bg-violet-600 text-white text-xs font-semibold rounded-lg hover:bg-violet-700 transition-colors shadow-sm w-full max-w-[140px] mx-auto"
+                            title="Move to Confirmed"
+                          >
+                            <CheckCircle size={14} /> Move to Confirmed
+                          </button>
                         ) : (
-                            <span className="text-slate-300">-</span>
+                          <span className="text-slate-300">-</span>
                         )}
                       </td>
                       <td className="py-4 px-6 text-center">
                         <div className="flex items-center justify-center gap-2">
-                          <button 
+                          <button
                             onClick={() => setSelectedOrder(order)}
                             className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                             title="View Invoice"
@@ -354,36 +889,136 @@ export const OrdersView: React.FC<OrdersViewProps> = ({ initialSearchTerm = '' }
             </div>
           )}
         </div>
-      </div>
+      </div >
 
       {/* Invoice Modal */}
-      {selectedOrder && (
-        <div className="fixed inset-0 z-[1000] flex justify-center items-start bg-black/60 backdrop-blur-sm p-4 pt-24 overflow-y-auto">
-          <InvoiceModal order={selectedOrder} onClose={() => setSelectedOrder(null)} />
-        </div>
-      )}
-    </div>
+      {
+        selectedOrder && (
+          <div className="fixed inset-0 z-[1000] flex justify-center items-start bg-black/60 backdrop-blur-sm p-4 pt-24 overflow-y-auto">
+            <InvoiceModal order={selectedOrder} onClose={() => setSelectedOrder(null)} />
+          </div>
+        )
+      }
+
+      {/* Dimensions Modal */}
+      {
+        dimensionsModalOpen && (
+          <div className="fixed inset-0 z-[1100] flex justify-center items-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+            <div className="bg-white w-full max-w-md rounded-lg shadow-2xl overflow-hidden animate-in fade-in duration-200">
+              <div className="px-6 py-3 flex items-center justify-between border-b">
+                <h3 className="text-lg font-medium">Add Package Dimensions</h3>
+                <button onClick={() => setDimensionsModalOpen(false)} className="text-slate-500 hover:text-slate-700 p-1">
+                  <X size={18} />
+                </button>
+              </div>
+              <form onSubmit={handleDimensionsSubmit} className="p-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <label className="flex flex-col text-sm">
+                    <span className="text-xs text-slate-500 mb-1">Height (cm)</span>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      value={dimensionsData.height}
+                      onChange={(e) => setDimensionsData(d => ({ ...d, height: e.target.value }))}
+                      className="px-3 py-2 border border-slate-200 rounded-lg outline-none text-sm"
+                      required
+                    />
+                  </label>
+
+                  <label className="flex flex-col text-sm">
+                    <span className="text-xs text-slate-500 mb-1">Weight (kg)</span>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      value={dimensionsData.weight}
+                      onChange={(e) => setDimensionsData(d => ({ ...d, weight: e.target.value }))}
+                      className="px-3 py-2 border border-slate-200 rounded-lg outline-none text-sm"
+                      required
+                    />
+                  </label>
+
+                  <label className="flex flex-col text-sm">
+                    <span className="text-xs text-slate-500 mb-1">Breadth (cm)</span>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      value={dimensionsData.breadth}
+                      onChange={(e) => setDimensionsData(d => ({ ...d, breadth: e.target.value }))}
+                      className="px-3 py-2 border border-slate-200 rounded-lg outline-none text-sm"
+                      required
+                    />
+                  </label>
+
+                  <label className="flex flex-col text-sm">
+                    <span className="text-xs text-slate-500 mb-1">Length (cm)</span>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      value={dimensionsData.length}
+                      onChange={(e) => setDimensionsData(d => ({ ...d, length: e.target.value }))}
+                      className="px-3 py-2 border border-slate-200 rounded-lg outline-none text-sm"
+                      required
+                    />
+                  </label>
+                </div>
+
+                <div className="mt-6 flex items-center justify-end gap-3">
+                  <button type="button" onClick={() => setDimensionsModalOpen(false)} className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 hover:bg-slate-50">
+                    Cancel
+                  </button>
+                  <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700">
+                    Save Dimensions
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )
+      }
+
+    </div >
   );
 };
 
 const InvoiceModal = ({ order, onClose }: { order: any, onClose: () => void }) => {
   // Robust amount handling: parse string if needed, or use number directly
-  const amountValue = typeof order.amount === 'string' 
-    ? parseFloat(order.amount.replace(/[^0-9.-]+/g,"")) 
+  const amountValue = typeof order.amount === 'string'
+    ? parseFloat(order.amount.replace(/[^0-9.-]+/g, ""))
     : order.amount;
 
   const taxRate = 0.18;
   const subtotal = amountValue / (1 + taxRate);
   const sgst = subtotal * 0.09;
   const cgst = subtotal * 0.09;
-  
+
   // Generate dummy items based on item count
-  const invoiceItems = Array.from({ length: order.items }).map((_, i) => ({
-    id: i + 1,
-    desc: i === 0 ? `Main Product - ${order.type} SKU` : `Accessory / Component Part #${1000 + i}`,
-    qty: 1,
-    price: (subtotal / order.items)
-  }));
+  // Use actual product list if available, otherwise fallback to dummy items
+  // Helper to safely parse price
+  const parsePrice = (p: any) => {
+    if (typeof p === 'number') return p;
+    if (typeof p === 'string') return parseFloat(p.replace(/[^0-9.-]+/g, ""));
+    return 0;
+  };
+
+  const invoiceItems = (order.productList && order.productList.length > 0)
+    ? order.productList.map((item: any, i: number) => ({
+      id: i + 1,
+      desc: (typeof item === 'string' ? item : (item.name || item.product_name || item.product || item.title || item.description || `Product #${item.id || item.product_id || i + 1}`)),
+      hsn: item.hsn || item.hsn_code || item.hsnCode || '',
+      qty: parseInt(item.quantity || item.qty || item.count || '1'),
+      price: parsePrice(item.price || item.unit_price || item.amount || item.selling_price) || (subtotal / (order.productList.length || 1))
+    }))
+    : Array.from({ length: order.items || 1 }).map((_, i) => ({
+      id: i + 1,
+      desc: i === 0 ? `Main Product - ${order.type} SKU` : `Accessory / Component Part #${1000 + i}`,
+      hsn: '',
+      qty: 1,
+      price: (subtotal / (order.items || 1))
+    }));
 
   return (
     <div className="bg-white w-full max-w-3xl rounded-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 mb-8">
@@ -393,14 +1028,14 @@ const InvoiceModal = ({ order, onClose }: { order: any, onClose: () => void }) =
           <CreditCard size={16} /> Invoice Preview
         </span>
         <div className="flex items-center gap-2">
-          <button 
-            onClick={() => window.print()} 
+          <button
+            onClick={() => window.print()}
             className="p-2 hover:bg-slate-700 rounded-md transition-colors text-slate-300 hover:text-white"
             title="Print Invoice"
           >
             <Printer size={18} />
           </button>
-          <button 
+          <button
             onClick={onClose}
             className="p-2 bg-red-600 hover:bg-red-700 rounded-md transition-colors text-white"
             title="Close Invoice"
@@ -425,8 +1060,9 @@ const InvoiceModal = ({ order, onClose }: { order: any, onClose: () => void }) =
           </div>
           <div className="text-right">
             <h2 className="text-4xl font-light text-gray-200 uppercase tracking-widest mb-2">Invoice</h2>
-            <p className="text-sm font-bold text-gray-900">INV-{order.id.split('-')[1]}</p>
-            <p className="text-sm text-gray-500">Date: {order.date}</p>
+            <p className="text-sm text-gray-500 mb-1">Invoice Number</p>
+            <p className="text-lg font-bold text-gray-900 font-mono">INV-{order.id.split('-')[1] || order.id}</p>
+            <p className="text-sm text-gray-500 mt-2">Date: {order.date}</p>
             <div className={`mt-2 inline-block px-3 py-1 rounded border text-xs font-bold uppercase ${order.payment === 'Paid' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
               {order.payment}
             </div>
@@ -441,18 +1077,40 @@ const InvoiceModal = ({ order, onClose }: { order: any, onClose: () => void }) =
             <div className="text-sm text-gray-600 mt-1 space-y-1">
               <p className="flex items-start gap-2"><MapPin size={14} className="mt-0.5 shrink-0" /> {order.address || 'Address on file'}</p>
               <p className="flex items-center gap-2"><Mail size={14} /> {order.email || 'email@example.com'}</p>
-              <p className="flex items-center gap-2"><Phone size={14} /> +91 98765 43210</p>
+              <p className="flex items-center gap-2"><Phone size={14} /> {order.phone || '+91 98765 43210'}</p>
             </div>
+
           </div>
           <div className="text-right">
             <h3 className="text-xs font-bold text-gray-400 uppercase mb-2">Order Details</h3>
             <div className="text-sm text-gray-600 space-y-1">
-               <p>Order ID: <span className="font-mono font-medium text-gray-900">{order.id}</span></p>
-               <p>Order Type: <span className="font-medium text-gray-900">{order.type}</span></p>
-               <p>Total Items: <span className="font-medium text-gray-900">{order.items}</span></p>
+              <p>Order ID: <span className="font-mono font-medium text-gray-900">{order.id}</span></p>
+              <p>Order Type: <span className="font-medium text-gray-900">{order.type}</span></p>
+              <p>Total Items: <span className="font-medium text-gray-900">{order.items}</span></p>
             </div>
           </div>
         </div>
+
+        {/* AWB Barcode Section - Only show if AWB number exists */}
+        {order.awb_number && (
+          <div className="mb-8 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-lg">
+            <div className="flex flex-col items-center">
+              <h3 className="text-xs font-bold text-gray-500 uppercase mb-3 tracking-wider">AWB Tracking Number</h3>
+              <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <Barcode
+                  value={order.awb_number}
+                  width={2}
+                  height={60}
+                  fontSize={14}
+                  background="#ffffff"
+                  lineColor="#000000"
+                  displayValue={true}
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-2">Scan this barcode for shipment tracking</p>
+            </div>
+          </div>
+        )}
 
         {/* Line Items */}
         <div className="mb-8">
@@ -460,9 +1118,9 @@ const InvoiceModal = ({ order, onClose }: { order: any, onClose: () => void }) =
             <thead className="bg-gray-50 text-gray-500 text-xs font-bold uppercase">
               <tr>
                 <th className="px-4 py-3 rounded-l-md">#</th>
-                <th className="px-4 py-3 w-1/2">Item Description</th>
+                <th className="px-4 py-3 w-1/2">Items</th>
+                <th className="px-4 py-3 text-center">HSN Code</th>
                 <th className="px-4 py-3 text-right">Qty</th>
-                <th className="px-4 py-3 text-right">Rate</th>
                 <th className="px-4 py-3 text-right rounded-r-md">Amount</th>
               </tr>
             </thead>
@@ -471,8 +1129,8 @@ const InvoiceModal = ({ order, onClose }: { order: any, onClose: () => void }) =
                 <tr key={idx}>
                   <td className="px-4 py-3 text-sm text-gray-400 font-mono">{idx + 1}</td>
                   <td className="px-4 py-3 text-sm text-gray-900 font-medium">{item.desc}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600 text-center font-mono">{item.hsn || 'N/A'}</td>
                   <td className="px-4 py-3 text-sm text-gray-600 text-right">{item.qty}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600 text-right">₹{item.price.toFixed(2)}</td>
                   <td className="px-4 py-3 text-sm text-gray-900 font-bold text-right">₹{(item.price * item.qty).toFixed(2)}</td>
                 </tr>
               ))}
@@ -485,15 +1143,15 @@ const InvoiceModal = ({ order, onClose }: { order: any, onClose: () => void }) =
           <div className="w-64 space-y-3">
             <div className="flex justify-between text-sm text-gray-600">
               <span>Subtotal</span>
-              <span className="font-medium">₹{subtotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+              <span className="font-medium">₹{subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </div>
             <div className="flex justify-between text-sm text-gray-600">
               <span>SGST (9%)</span>
-              <span className="font-medium">₹{sgst.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+              <span className="font-medium">₹{sgst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </div>
             <div className="flex justify-between text-sm text-gray-600">
               <span>CGST (9%)</span>
-              <span className="font-medium">₹{cgst.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+              <span className="font-medium">₹{cgst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </div>
             <div className="flex justify-between text-lg font-bold text-gray-900 border-t border-gray-200 pt-3">
               <span>Total</span>
@@ -510,13 +1168,13 @@ const InvoiceModal = ({ order, onClose }: { order: any, onClose: () => void }) =
 
         {/* Exit Button */}
         <div className="mt-8 flex justify-center print:hidden border-t border-gray-100 pt-6">
-            <button 
-                onClick={onClose}
-                className="flex items-center gap-2 px-6 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-all shadow-sm font-medium text-sm"
-            >
-                <ArrowLeft size={16} />
-                Exit to Dashboard
-            </button>
+          <button
+            onClick={onClose}
+            className="flex items-center gap-2 px-6 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-all shadow-sm font-medium text-sm"
+          >
+            <ArrowLeft size={16} />
+            Exit to Dashboard
+          </button>
         </div>
       </div>
     </div>

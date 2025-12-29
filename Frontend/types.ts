@@ -38,6 +38,17 @@ export interface Product {
   b2bOfferPrice?: number; // Calculated Offer Price
   b2bOfferStartDate?: string;
   b2bOfferEndDate?: string;
+  // Tax and Compliance
+  sgst?: number; // SGST percentage
+  cgst?: number; // CGST percentage
+  hsn?: string; // HSN code
+  returnPolicy?: string; // Return policy description
+  // Dimensions (for shipping)
+  height?: number; // in cm
+  weight?: number; // in kg
+  breadth?: number; // in cm
+  length?: number; // in cm
+  createdAt?: string;
 }
 
 export interface Brand {
@@ -106,6 +117,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  phone?: string;
   status: 'Active' | 'Inactive';
   joinDate: string;
   type: 'B2B' | 'B2C' | 'Admin' | 'Staff';

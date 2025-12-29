@@ -75,11 +75,45 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ initialSearchTerm = 
     b2bOfferPercentage: 0,
     b2bOfferPrice: 0,
     b2bOfferStartDate: '',
-    b2bOfferEndDate: ''
+    b2bOfferEndDate: '',
+    // Tax and Compliance
+    sgst: 0,
+    cgst: 0,
+    hsn: '',
+    returnPolicy: '',
+    // Dimensions
+    height: 0,
+    weight: 0,
+    breadth: 0,
+    length: 0
   });
 
   const [newAttribute, setNewAttribute] = useState({ name: '', value: '' });
   const [newVariant, setNewVariant] = useState<ProductVariant>({ color: '', colorCode: '#000000', stock: 0 });
+
+  // Color name to hex converter
+  const getColorHex = (colorName: string): string => {
+    const colors: { [key: string]: string } = {
+      // Basic colors
+      'red': '#FF0000', 'blue': '#0000FF', 'green': '#008000', 'yellow': '#FFFF00',
+      'black': '#000000', 'white': '#FFFFFF', 'gray': '#808080', 'grey': '#808080',
+      'orange': '#FFA500', 'purple': '#800080', 'pink': '#FFC0CB', 'brown': '#A52A2A',
+      'cyan': '#00FFFF', 'magenta': '#FF00FF', 'lime': '#00FF00', 'navy': '#000080',
+      'teal': '#008080', 'olive': '#808000', 'maroon': '#800000', 'aqua': '#00FFFF',
+      'silver': '#C0C0C0', 'gold': '#FFD700', 'beige': '#F5F5DC', 'ivory': '#FFFFF0',
+      'violet': '#EE82EE', 'indigo': '#4B0082', 'turquoise': '#40E0D0', 'coral': '#FF7F50',
+      'salmon': '#FA8072', 'khaki': '#F0E68C', 'lavender': '#E6E6FA', 'plum': '#DDA0DD',
+      'crimson': '#DC143C', 'mint': '#98FF98', 'peach': '#FFDAB9', 'rose': '#FF007F',
+      // Common product colors
+      'sky blue': '#87CEEB', 'dark blue': '#00008B', 'light blue': '#ADD8E6',
+      'dark green': '#006400', 'light green': '#90EE90', 'forest green': '#228B22',
+      'dark red': '#8B0000', 'light red': '#FF6B6B', 'bright red': '#FF0000',
+      'dark gray': '#A9A9A9', 'light gray': '#D3D3D3', 'charcoal': '#36454F'
+    };
+
+    const normalized = colorName.toLowerCase().trim();
+    return colors[normalized] || '#000000';
+  };
 
   // Load Data from API
   // Load products on mount
@@ -214,7 +248,17 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ initialSearchTerm = 
       b2bOfferPercentage: 0,
       b2bOfferPrice: 0,
       b2bOfferStartDate: '',
-      b2bOfferEndDate: ''
+      b2bOfferEndDate: '',
+      // Tax and Compliance
+      sgst: 0,
+      cgst: 0,
+      hsn: '',
+      returnPolicy: '',
+      // Dimensions
+      height: 0,
+      weight: 0,
+      breadth: 0,
+      length: 0
     });
     setNewAttribute({ name: '', value: '' });
     setNewVariant({ color: '', colorCode: '#000000', stock: 0 });
@@ -238,7 +282,17 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ initialSearchTerm = 
       b2bOfferPercentage: product.b2bOfferPercentage || 0,
       b2bOfferPrice: product.b2bOfferPrice || 0,
       b2bOfferStartDate: product.b2bOfferStartDate || '',
-      b2bOfferEndDate: product.b2bOfferEndDate || ''
+      b2bOfferEndDate: product.b2bOfferEndDate || '',
+      // Tax and Compliance
+      sgst: product.sgst || 0,
+      cgst: product.cgst || 0,
+      hsn: product.hsn || '',
+      returnPolicy: product.returnPolicy || '',
+      // Dimensions
+      height: product.height || 0,
+      weight: product.weight || 0,
+      breadth: product.breadth || 0,
+      length: product.length || 0
     });
     setShowModal(true);
     setOpenActionMenuId(null);
@@ -460,42 +514,120 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ initialSearchTerm = 
     setShowReviewsModal(true);
   };
 
+  // Helper function to format date with time for Excel export
+  const formatDateTime = (dateValue: string | null | undefined): string => {
+    if (!dateValue) return '';
+    const d = new Date(dateValue);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+  };
+
   // --- Export/Import Logic ---
-  const handleExport = () => {
-    const headers = [
-      'ID', 'Name', 'Category', 'B2C Selling Price', 'MRP', 'B2C Discount %', 'B2B Selling Price', 'B2B Discount %', 'B2C Offer %', 'B2B Offer %', 'B2C Offer Start Date', 'B2C Offer End Date', 'B2B Offer Start Date', 'B2B Offer End Date', 'Stock', 'Status'
-    ];
+  const handleExport = async () => {
+    try {
+      // Dynamically import xlsx library
+      const XLSX = await import('xlsx');
 
+      const productsToExport = selectedProductIds.length > 0
+        ? products.filter(p => selectedProductIds.includes(p.id))
+        : products;
 
+      // Prepare data for Excel export
+      const excelData = productsToExport.map(p => ({
+        'Product ID': p.id,
+        'Name': p.name,
+        'Category': p.category,
+        'B2C Price': p.b2cPrice || 0,
+        'B2B Price': p.b2bPrice || 0,
+        'MRP': p.compareAtPrice || 0,
+        'B2C Discount %': p.b2cDiscount || 0,
+        'B2B Discount %': p.b2bDiscount || 0,
+        'B2C Active Offer %': p.b2cOfferPercentage || 0,
+        'B2C Offer Price': p.b2cOfferPrice || 0,
+        'B2C Offer Start Date': formatDateTime(p.b2cOfferStartDate),
+        'B2C Offer End Date': formatDateTime(p.b2cOfferEndDate),
+        'B2B Active Offer %': p.b2bOfferPercentage || 0,
+        'B2B Offer Price': p.b2bOfferPrice || 0,
+        'B2B Offer Start Date': formatDateTime(p.b2bOfferStartDate),
+        'B2B Offer End Date': formatDateTime(p.b2bOfferEndDate),
+        'Stock': p.stock || 0,
+        'Variants (Colors)': p.variants && p.variants.length > 0
+          ? p.variants.map(v => `${v.color} (Stock: ${v.stock})`).join(', ')
+          : '',
+        'Description': p.description || '',
+        'Status': p.status,
+        'SGST %': p.sgst || 0,
+        'CGST %': p.cgst || 0,
+        'HSN Code': p.hsn || '',
+        'Return Policy': p.returnPolicy || '',
+        'Height (cm)': p.height || 0,
+        'Weight (kg)': p.weight || 0,
+        'Breadth (cm)': p.breadth || 0,
+        'Length (cm)': p.length || 0,
 
-    const productsToExport = selectedProductIds.length > 0
-      ? products.filter(p => selectedProductIds.includes(p.id))
-      : products;
+        'Image URL': p.image || '',
+        'Rating': p.rating || 0,
+        'Reviews': p.reviews || 0,
+        'Created Date': p.createdAt ? new Date(p.createdAt).toLocaleDateString() : ''
+      }));
 
-    const rows = productsToExport.map(p => [
-      p.id,
-      `"${p.name.replace(/"/g, '""')}"`,
-      p.category,
-      p.b2cPrice,
-      p.compareAtPrice || 0,
-      `${p.b2cDiscount || 0}%`,
-      p.b2bPrice,
-      `${p.b2bDiscount || 0}%`,
-      p.stock,
-      p.status
-    ].join(','));
+      // Create worksheet
+      const worksheet = XLSX.utils.json_to_sheet(excelData);
 
-    const csvContent = [headers.join(','), ...rows].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    if (link.download !== undefined) {
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', selectedProductIds.length > 0 ? 'selected_products.csv' : 'all_products.csv');
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      // Set column widths
+      const columnWidths = [
+        { wch: 15 }, // Product ID
+        { wch: 30 }, // Name
+        { wch: 15 }, // Category
+        { wch: 12 }, // B2C Price
+        { wch: 12 }, // B2B Price
+        { wch: 12 }, // MRP
+        { wch: 15 }, // B2C Discount %
+        { wch: 15 }, // B2B Discount %
+        { wch: 18 }, // B2C Active Offer %
+        { wch: 15 }, // B2C Offer Price
+        { wch: 18 }, // B2C Offer Start Date
+        { wch: 18 }, // B2C Offer End Date
+        { wch: 18 }, // B2B Active Offer %
+        { wch: 15 }, // B2B Offer Price
+        { wch: 18 }, // B2B Offer Start Date
+        { wch: 18 }, // B2B Offer End Date
+        { wch: 10 }, // Stock
+        { wch: 30 }, // Variants (Colors)
+        { wch: 40 }, // Description
+        { wch: 10 }, // Status
+        { wch: 10 }, // SGST %
+        { wch: 10 }, // CGST %
+        { wch: 15 }, // HSN Code
+        { wch: 30 }, // Return Policy
+        { wch: 12 }, // Height
+        { wch: 12 }, // Weight
+        { wch: 12 }, // Breadth
+        { wch: 12 }, // Length
+
+        { wch: 50 }, // Image URL
+        { wch: 10 }, // Rating
+        { wch: 10 }, // Reviews
+        { wch: 15 }  // Created Date
+      ];
+      worksheet['!cols'] = columnWidths;
+
+      // Create workbook
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Products');
+
+      // Generate Excel file
+      const fileName = selectedProductIds.length > 0
+        ? `selected_products_${new Date().toISOString().split('T')[0]}.xlsx`
+        : `all_products_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+      XLSX.writeFile(workbook, fileName);
+
+      console.log(`✅ Exported ${productsToExport.length} products as Excel file`);
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Failed to export products. Installing xlsx library...');
+      // Fallback to CSV if xlsx is not available
+      window.open('https://www.npmjs.com/package/xlsx', '_blank');
     }
   };
 
@@ -507,9 +639,9 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ initialSearchTerm = 
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
-    if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
-      alert("Please upload an Excel file (.xlsx or .xls)");
+    // Validate file type - accept both Excel and CSV
+    if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls') && !file.name.endsWith('.csv')) {
+      alert("Please upload an Excel file (.xlsx, .xls) or CSV file (.csv)");
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
@@ -530,7 +662,11 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ initialSearchTerm = 
       }
 
       alert(message);
-      loadProducts(); // Refresh the product list
+
+      // Wait a bit to ensure database commit completes before refreshing
+      setTimeout(() => {
+        loadProducts(); // Refresh the product list
+      }, 500);
     } catch (error: any) {
       console.error("Import failed:", error);
       alert(`Import failed: ${error.message || "Unknown error"}`);
@@ -649,7 +785,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ initialSearchTerm = 
           >
             <FileDown className="mr-2 h-4 w-4" /> Export {selectedProductIds.length > 0 ? `(${selectedProductIds.length})` : 'All'}
           </button>
-          <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".xlsx,.xls" className="hidden" />
+          <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".xlsx,.xls,.csv" className="hidden" />
           <button
             className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors border border-input bg-white shadow-sm hover:bg-gray-100 h-9 px-4 py-2 text-gray-900"
             onClick={handleImportClick}
@@ -731,6 +867,10 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ initialSearchTerm = 
                 <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Active Offer (B2C)</th>
                 <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Active Offer (B2B)</th>
                 <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Stock</th>
+                <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">SGST %</th>
+                <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">CGST %</th>
+                <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">HSN</th>
+                <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Dimensions</th>
                 <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Category</th>
                 <th className="h-12 px-4 text-right align-middle font-medium text-muted-foreground">Actions</th>
               </tr>
@@ -873,9 +1013,49 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ initialSearchTerm = 
                         {product.variants && product.variants.length > 0 && (
                           <div className="flex items-center gap-1 mt-1 flex-wrap max-w-[100px]">
                             {product.variants.map((variant, idx) => (
-                              <div key={idx} className="w-2 h-2 rounded-full border border-gray-300" style={{ backgroundColor: variant.colorCode }} title={`${variant.color}`} />
+                              <div
+                                key={idx}
+                                className="w-2 h-2 rounded-full border border-gray-300"
+                                style={{ backgroundColor: variant.colorCode }}
+                                title={`${variant.color}: ${variant.stock} in stock`}
+                              />
                             ))}
                           </div>
+                        )}
+                      </div>
+                    </td>
+                    {/* SGST Column */}
+                    <td className="p-4 align-middle">
+                      <span className="text-sm text-gray-700">{product.sgst ? `${product.sgst}%` : '-'}</span>
+                    </td>
+                    {/* CGST Column */}
+                    <td className="p-4 align-middle">
+                      <span className="text-sm text-gray-700">{product.cgst ? `${product.cgst}%` : '-'}</span>
+                    </td>
+                    {/* HSN Column */}
+                    <td className="p-4 align-middle">
+                      <span className="text-sm text-gray-700 font-mono">{product.hsn || '-'}</span>
+                    </td>
+                    {/* Dimensions Column */}
+                    <td className="p-4 align-middle">
+                      <div className="text-xs text-gray-600">
+                        {(product.length || product.breadth || product.height || product.weight) ? (
+                          <>
+                            {product.length || product.breadth || product.height ? (
+                              <div className="flex items-center gap-1">
+
+                                <span>{product.length || 0}×{product.breadth || 0}×{product.height || 0} cm</span>
+                              </div>
+                            ) : null}
+                            {product.weight ? (
+                              <div className="flex items-center gap-1 mt-0.5">
+
+                                <span>{product.weight} kg</span>
+                              </div>
+                            ) : null}
+                          </>
+                        ) : (
+                          <span className="text-gray-400">-</span>
                         )}
                       </div>
                     </td>
@@ -943,17 +1123,30 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ initialSearchTerm = 
           </div>
           <div className="flex items-center space-x-2">
             <button onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1} className="p-2 rounded-md border border-gray-300 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronLeft size={16} /></button>
-            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-              let pageNum = i + 1;
-              if (totalPages > 5 && currentPage > 3) {
-                pageNum = currentPage - 2 + i;
-                if (pageNum > totalPages) pageNum = pageNum - (pageNum - totalPages);
+            {(() => {
+              const pages = [];
+              const maxPagesToShow = 5;
+              let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
+              let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+
+              // Adjust start if we're near the end
+              if (endPage - startPage < maxPagesToShow - 1) {
+                startPage = Math.max(1, endPage - maxPagesToShow + 1);
               }
-              if (pageNum > totalPages || pageNum < 1) return null;
-              return (
-                <button key={pageNum} onClick={() => handlePageChange(pageNum)} className={`w-8 h-8 flex items-center justify-center rounded-md text-sm font-medium border ${currentPage === pageNum ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}>{pageNum}</button>
-              );
-            })}
+
+              for (let i = startPage; i <= endPage; i++) {
+                pages.push(
+                  <button
+                    key={`page-${i}`}
+                    onClick={() => handlePageChange(i)}
+                    className={`w-8 h-8 flex items-center justify-center rounded-md text-sm font-medium border ${currentPage === i ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+                  >
+                    {i}
+                  </button>
+                );
+              }
+              return pages;
+            })()}
             <button onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === totalPages} className="p-2 rounded-md border border-gray-300 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronRight size={16} /></button>
           </div>
         </div>
@@ -1274,6 +1467,105 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ initialSearchTerm = 
                 )}
               </div>
 
+              {/* Tax and Compliance Section */}
+              <div className="space-y-4 border-t border-gray-100 pt-4 mt-4">
+                <h4 className="text-sm font-semibold text-gray-900">Tax & Compliance</h4>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-gray-700">SGST (%)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={formData.sgst || ''}
+                      onChange={(e) => setFormData({ ...formData, sgst: parseFloat(e.target.value) || 0 })}
+                      className="flex h-9 w-full rounded-md border border-input bg-white px-3 text-sm text-gray-900"
+                      placeholder="e.g. 9"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-gray-700">CGST (%)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={formData.cgst || ''}
+                      onChange={(e) => setFormData({ ...formData, cgst: parseFloat(e.target.value) || 0 })}
+                      className="flex h-9 w-full rounded-md border border-input bg-white px-3 text-sm text-gray-900"
+                      placeholder="e.g. 9"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-gray-700">HSN Code</label>
+                    <input
+                      type="text"
+                      value={formData.hsn || ''}
+                      onChange={(e) => setFormData({ ...formData, hsn: e.target.value })}
+                      className="flex h-9 w-full rounded-md border border-input bg-white px-3 text-sm text-gray-900"
+                      placeholder="e.g. 85366990"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-gray-700">Return Policy</label>
+                  <textarea
+                    value={formData.returnPolicy || ''}
+                    onChange={(e) => setFormData({ ...formData, returnPolicy: e.target.value })}
+                    className="flex min-h-[60px] w-full rounded-md border border-input bg-white px-3 py-2 text-sm text-gray-900"
+                    placeholder="e.g. 7 days return policy. Product must be unused and in original packaging."
+                  />
+                </div>
+              </div>
+
+              {/* Dimensions Section */}
+              <div className="space-y-4 border-t border-gray-100 pt-4 mt-4">
+                <h4 className="text-sm font-semibold text-gray-900">Dimensions (for Shipping)</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-gray-700">Length (cm)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={formData.length || ''}
+                      onChange={(e) => setFormData({ ...formData, length: parseFloat(e.target.value) || 0 })}
+                      className="flex h-9 w-full rounded-md border border-input bg-white px-3 text-sm text-gray-900"
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-gray-700">Breadth (cm)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={formData.breadth || ''}
+                      onChange={(e) => setFormData({ ...formData, breadth: parseFloat(e.target.value) || 0 })}
+                      className="flex h-9 w-full rounded-md border border-input bg-white px-3 text-sm text-gray-900"
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-gray-700">Height (cm)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={formData.height || ''}
+                      onChange={(e) => setFormData({ ...formData, height: parseFloat(e.target.value) || 0 })}
+                      className="flex h-9 w-full rounded-md border border-input bg-white px-3 text-sm text-gray-900"
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-gray-700">Weight (kg)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={formData.weight || ''}
+                      onChange={(e) => setFormData({ ...formData, weight: parseFloat(e.target.value) || 0 })}
+                      className="flex h-9 w-full rounded-md border border-input bg-white px-3 text-sm text-gray-900"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+              </div>
+
               {/* Variants UI */}
               <div className="space-y-3 border-t border-gray-100 pt-4 mt-2">
                 <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2"><Palette size={16} /> Variants</h4>
@@ -1291,8 +1583,23 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ initialSearchTerm = 
                     </div>
                   ) : <p className="text-xs text-gray-400 text-center py-2">No variants added.</p>}
                   <div className="flex gap-2 pt-2 border-t border-gray-200 items-end">
-                    <input placeholder="Color" className="flex-1 h-8 text-xs border rounded px-2 text-gray-900" value={newVariant.color} onChange={(e) => setNewVariant({ ...newVariant, color: e.target.value })} />
-                    <input type="color" className="w-8 h-8 p-0 border rounded cursor-pointer" value={newVariant.colorCode} onChange={(e) => setNewVariant({ ...newVariant, colorCode: e.target.value })} />
+                    <input
+                      placeholder="Color (e.g., Red, Blue)"
+                      className="flex-1 h-8 text-xs border rounded px-2 text-gray-900"
+                      value={newVariant.color}
+                      onChange={(e) => {
+                        const colorName = e.target.value;
+                        const hexCode = getColorHex(colorName);
+                        setNewVariant({ ...newVariant, color: colorName, colorCode: hexCode });
+                      }}
+                    />
+                    <input
+                      type="color"
+                      className="w-8 h-8 p-0 border rounded cursor-pointer"
+                      value={newVariant.colorCode}
+                      onChange={(e) => setNewVariant({ ...newVariant, colorCode: e.target.value })}
+                      title="Click to pick custom color"
+                    />
                     <input type="number" placeholder="Qty" className="w-20 h-8 text-xs border rounded px-2 text-gray-900" value={newVariant.stock} onChange={(e) => setNewVariant({ ...newVariant, stock: parseInt(e.target.value) || 0 })} />
                     <button onClick={handleAddVariant} className="bg-gray-900 text-white h-8 px-3 rounded text-xs font-medium" disabled={!newVariant.color}>Add</button>
                   </div>

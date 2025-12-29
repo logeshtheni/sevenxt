@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 # Login Schemas
@@ -17,7 +17,7 @@ class EmployeeCreate(BaseModel):
     city: Optional[str] = None
     state: Optional[str] = None
     pincode: Optional[str] = None
-    permissions: Optional[List[str]] = None
+    permissions: Optional[Any] = None
 
 # User Response Schemas
 class UserResponse(BaseModel):
@@ -31,7 +31,7 @@ class UserResponse(BaseModel):
     city: Optional[str] = None
     state: Optional[str] = None
     pincode: Optional[str] = None
-    permissions: Optional[List[str]] = None
+    permissions: Optional[Any] = None
     last_login: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

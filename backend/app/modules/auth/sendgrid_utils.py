@@ -16,7 +16,7 @@ class SendGridService:
         if settings.SENDGRID_API_KEY:
             try:
                 self.client = SendGridAPIClient(settings.SENDGRID_API_KEY)
-                logger.info("SendGrid client initialized successfully")
+                logger.info("")
             except Exception as e:
                 logger.error(f"Failed to initialize SendGrid Client: {e}")
 

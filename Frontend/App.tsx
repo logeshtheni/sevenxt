@@ -20,7 +20,8 @@ import {
   BarChart3,
   LogOut,
   Plane,
-  MapPin
+  MapPin,
+  RefreshCw
 } from "lucide-react";
 import { DashboardView } from "./components/DashboardView";
 import { ProductsView } from "./components/ProductsView";
@@ -28,13 +29,14 @@ import { UsersView } from "./components/UsersView";
 import { B2BView } from "./components/B2BView";
 import { OrdersView } from "./components/OrdersView";
 import { DeliveryView } from "./components/DeliveryView";
-import { PorterView } from "./components/PorterView";
+import { PorterView } from "./components/LocalDelivery";
 import { RefundsView } from "./components/RefundsView";
+import ExchangesView from "./components/ExchangesView";
 import { CategoriesView } from "./components/CategoriesView";
 import { SettingsView } from "./components/SettingsView";
 import { FinanceView } from "./components/FinanceView";
-import {CampaignsView}  from "./components/CampaignsView";
-import  CMSView  from "./components/CMSView";
+import { CampaignsView } from "./components/CampaignsView";
+import { CMSView } from "./components/CMSView";
 import { ReportsView } from "./components/ReportsView";
 import { LoginView } from "./components/LoginView";
 import { ViewState } from "./types";
@@ -60,6 +62,7 @@ const App: React.FC = () => {
     { id: "DELIVERY", label: "Delivery (Outstation)", icon: Truck }, // Updated label and icon
     { id: "PORTER", label: "Local Delivery (Chennai)", icon: MapPin }, // Updated label and icon
     { id: "REFUNDS", label: "Refunds", icon: RotateCcw },
+    { id: "EXCHANGES", label: "Exchanges", icon: RefreshCw },
     { id: ViewState.PRODUCTS, label: "Products", icon: Package },
     { id: "CATEGORIES", label: "Categories", icon: FolderTree },
     { id: "PRICING", label: "Campaigns", icon: CreditCard },
@@ -101,6 +104,8 @@ const App: React.FC = () => {
         return <PorterView />;
       case "REFUNDS":
         return <RefundsView />;
+      case "EXCHANGES":
+        return <ExchangesView />;
       case "CATEGORIES":
         return <CategoriesView />;
       case "PRICING":
@@ -147,17 +152,17 @@ const App: React.FC = () => {
         transform transition-transform duration-300 ease-in-out
         ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"}
         md:translate-x-0
-        overflow-y-auto no-scrollbar shadow-xl
+        overflow-hidden shadow-xl
       `}
       >
         {/* Sidebar Header - Admin Box - Black */}
         <div className="h-24 flex items-center justify-between px-6 bg-black shrink-0">
           <div className="flex items-center">
-              <img
-                src={logo}
-                alt="Logo"
-                className="h-full w-full object-cover"
-              />
+            <img
+              src={logo}
+              alt="Logo"
+              className="h-full w-full object-cover"
+            />
           </div>
           <button
             onClick={() => setIsMobileMenuOpen(false)}
@@ -168,7 +173,7 @@ const App: React.FC = () => {
         </div>
 
         {/* Navigation - Dark Ace */}
-        <nav className="flex-1 px-3 space-y-1 py-4 bg-[#000000]">
+        <nav className="flex-1 px-3 space-y-1 py-4 bg-[#000000] overflow-y-auto no-scrollbar">
           {menuItems.map((item) => (
             <button
               key={item.id}
@@ -176,11 +181,10 @@ const App: React.FC = () => {
                 setActiveView(item.id);
                 setIsMobileMenuOpen(false);
               }}
-              className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
-                activeView === item.id
-                  ? "bg-[#DC2626] text-white shadow-sm ring-1 ring-white/10" /* Active Red */
-                  : "text-gray-300 hover:bg-white/5 hover:text-white"
-              }`}
+              className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors ${activeView === item.id
+                ? "bg-[#DC2626] text-white shadow-sm ring-1 ring-white/10" /* Active Red */
+                : "text-gray-300 hover:bg-white/5 hover:text-white"
+                }`}
             >
               <item.icon size={20} />
               <span>{item.label}</span>
@@ -189,7 +193,7 @@ const App: React.FC = () => {
         </nav>
 
         {/* User Profile Footer */}
-        <div className="p-4 border-t border-white/10 mt-auto bg-[#222a2d]">
+        <div className="p-4 border-t border-white/10 mt-auto bg-[#222a2d] ">
           <div className="flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-colors">
             <div
               className="flex items-center gap-3 cursor-pointer flex-1 min-w-0"
@@ -235,8 +239,8 @@ const App: React.FC = () => {
           <div className="flex items-center gap-4">
             {/* Search */}
             <div className="hidden md:flex items-center relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input
+              {/* <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" /> */}
+              {/* <input
                 type="text"
                 placeholder="Search..."
                 className="pl-10 pr-4 py-2 rounded-full bg-gray-100 border-none focus:ring-2 focus:ring-[#DC2626] text-sm w-64 outline-none text-gray-900"
@@ -244,7 +248,7 @@ const App: React.FC = () => {
                   e.key === "Enter" &&
                   alert(`Searching for: ${e.currentTarget.value}`)
                 }
-              />
+              /> */}
             </div>
 
             <button

@@ -36,6 +36,18 @@ class Product(Base):
     rating = Column(Float, default=0.0)
     reviews = Column(Integer, default=0)
     
+    # Tax and Compliance
+    sgst = Column(Float, default=0.0)  # SGST percentage (State GST)
+    cgst = Column(Float, default=0.0)  # CGST percentage (Central GST)
+    hsn = Column(String(20), nullable=True)  # HSN code
+    return_policy = Column(Text, nullable=True)  # Return policy description
+    
+    # Dimensions (for shipping)
+    height = Column(Float, default=0.0)  # in cm
+    weight = Column(Float, default=0.0)  # in kg
+    breadth = Column(Float, default=0.0)  # in cm
+    length = Column(Float, default=0.0)  # in cm
+    
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     

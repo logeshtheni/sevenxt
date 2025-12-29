@@ -61,6 +61,18 @@ class ProductBase(BaseModel):
     image: Optional[str] = None
     rating: float = 0.0
     reviews: int = 0
+    
+    # Tax and Compliance
+    sgst: float = 0.0
+    cgst: float = 0.0
+    hsn: Optional[str] = None
+    return_policy: Optional[str] = Field(None, alias="returnPolicy")
+    
+    # Dimensions (for shipping)
+    height: float = 0.0
+    weight: float = 0.0
+    breadth: float = 0.0
+    length: float = 0.0
 
     @field_validator('b2c_offer_start_date', 'b2c_offer_end_date', 'b2b_offer_start_date', 'b2b_offer_end_date', mode='before')
     @classmethod
@@ -104,6 +116,18 @@ class ProductUpdate(BaseModel):
     image: Optional[str] = None
     rating: Optional[float] = None
     reviews: Optional[int] = None
+    
+    # Tax and Compliance
+    sgst: Optional[float] = None
+    cgst: Optional[float] = None
+    hsn: Optional[str] = None
+    return_policy: Optional[str] = Field(None, alias="returnPolicy")
+    
+    # Dimensions (for shipping)
+    height: Optional[float] = None
+    weight: Optional[float] = None
+    breadth: Optional[float] = None
+    length: Optional[float] = None
 
     attributes: Optional[List[ProductAttributeCreate]] = None
     variants: Optional[List[ProductVariantCreate]] = None

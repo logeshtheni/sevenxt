@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { apiService } from '../services/api';
 import { Search, MoreVertical, Plus, Activity, CheckCircle, XCircle, AlertTriangle, X, ShieldAlert, Lock, Eye, Package, Edit, Trash2, UserX, UserCheck, MapPin, ShoppingCart, Heart, RotateCcw, FileText } from 'lucide-react';
-import { MOCK_USERS, MOCK_USER_ACTIVITY_LOGS, MOCK_PRODUCTS } from '../constants';
+import { MOCK_PRODUCTS } from '../constants';
 import { User } from '../types';
 
 export const UsersView: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<'B2B Users' | 'B2C Users' | 'Admin Users' | 'Staff Users' | 'Activity Logs'>('B2B Users');
+    const [activeTab, setActiveTab] = useState<'B2B Users' | 'B2C Users' | 'Admin Users' | 'Staff Users' | 'Activity Logs'>('Admin Users');
     const [searchTerm, setSearchTerm] = useState('');
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
@@ -14,20 +14,40 @@ export const UsersView: React.FC = () => {
         const fetchUsers = async () => {
             try {
                 const data = await apiService.getUsers();
+                console.log("Raw API Data:", data);
+
                 // Map API response to User interface
-                const mappedUsers: User[] = data.map((u: any) => ({
-                    id: u.id.toString(),
-                    name: u.full_name || u.name || 'Unknown',
-                    email: u.email,
-                    status: u.is_active ? 'Active' : 'Inactive',
-                    joinDate: u.created_at ? new Date(u.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-                    type: u.role === 'super_admin' ? 'Admin' : (u.role === 'admin' ? 'Admin' : (u.role === 'b2b' || u.role === 'seller' ? 'B2B' : (u.role === 'staff' ? 'Staff' : 'B2C'))), // Map roles
-                    permissions: [],
-                    address: u.address || '',
-                    city: u.city || '',
-                    state: u.state || '',
-                    pincode: u.pincode || ''
-                }));
+                const mappedUsers: User[] = data.map((u: any) => {
+                    // Map roles to UI types
+                    let type: 'B2B' | 'B2C' | 'Admin' | 'Staff' = 'Staff';
+                    const role = (u.role || '').toLowerCase();
+
+                    if (u.origin === 'employee') {
+                        if (role === 'admin' || role === 'super_admin') type = 'Admin';
+                        else type = 'Staff';
+                    } else if (u.origin === 'b2b') {
+                        type = 'B2B';
+                    } else if (u.origin === 'b2c') {
+                        type = 'B2C';
+                    }
+
+                    return {
+                        id: `${type}-${u.id}`,
+                        name: u.full_name || u.business_name || u.name || 'Unknown',
+                        email: u.email,
+                        phone: u.phone_number || u.phone || '',
+                        status: (u.status && u.status.toLowerCase() === 'active') ? 'Active' : (u.status ? u.status : 'Inactive'),
+                        joinDate: u.created_at ? new Date(u.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+                        type: type,
+                        permissions: u.permissions || [],
+                        address: u.address || '',
+                        city: u.city || '',
+                        state: u.state || '',
+                        pincode: u.pincode || ''
+                    };
+                });
+
+                console.log("Mapped Users:", mappedUsers);
                 setUsers(mappedUsers);
             } catch (error) {
                 console.error("Failed to fetch users:", error);
@@ -42,7 +62,7 @@ export const UsersView: React.FC = () => {
     const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [newUser, setNewUser] = useState({
-        name: '', email: '', password: '', role: 'B2C', status: 'Active',
+        name: '', email: '', password: '', role: 'Staff', status: 'Active',
         address: '', city: '', state: '', pincode: ''
     });
     const [newPermissions, setNewPermissions] = useState<string[]>([]);
@@ -56,7 +76,7 @@ export const UsersView: React.FC = () => {
     const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
     const actionMenuRef = useRef<HTMLDivElement>(null);
 
-    const tabs = ['B2B Users', 'B2C Users', 'Admin Users', 'Staff Users', 'Activity Logs'];
+    const tabs = ['Admin Users', 'Staff Users', 'B2B Users', 'B2C Users', 'Activity Logs'];
     const AVAILABLE_PERMISSIONS = ['Orders', 'Products', 'Users', 'B2B', 'Finance', 'Delivery', 'Refunds', 'CMS', 'Settings'];
 
     // Click outside to close action menu
@@ -107,6 +127,7 @@ export const UsersView: React.FC = () => {
             default: return <Activity size={14} className="text-gray-500" />;
         }
     };
+
     const handleSaveUser = async () => {
         if (newUser.name && newUser.email) {
             // Validate password for new users
@@ -117,19 +138,40 @@ export const UsersView: React.FC = () => {
 
             if (editingId) {
                 // Update existing user
-                setUsers(prev => prev.map(u => u.id === editingId ? {
-                    ...u,
-                    name: newUser.name,
-                    email: newUser.email,
-                    type: newUser.role as any,
-                    status: newUser.status as any,
-                    address: newUser.address,
-                    city: newUser.city,
-                    state: newUser.state,
-                    pincode: newUser.pincode,
-                    permissions: newUser.role === 'Staff' ? newPermissions : undefined
-                } : u));
-                closeUserModal();
+                try {
+                    const userToUpdate = users.find(u => u.id === editingId);
+                    if (!userToUpdate) return;
+
+                    await apiService.updateUser(editingId, userToUpdate.type, {
+                        name: newUser.name,
+                        email: newUser.email,
+                        role: newUser.role,
+                        status: newUser.status,
+                        address: newUser.address,
+                        city: newUser.city,
+                        state: newUser.state,
+                        pincode: newUser.pincode,
+                        permissions: newUser.role === 'Staff' ? newPermissions : undefined
+                    });
+
+                    setUsers(prev => prev.map(u => u.id === editingId ? {
+                        ...u,
+                        name: newUser.name,
+                        email: newUser.email,
+                        type: newUser.role as any,
+                        status: newUser.status as any,
+                        address: newUser.address,
+                        city: newUser.city,
+                        state: newUser.state,
+                        pincode: newUser.pincode,
+                        permissions: newUser.role === 'Staff' ? newPermissions : undefined
+                    } : u));
+                    closeUserModal();
+                    alert("User updated successfully");
+                } catch (error) {
+                    console.error("Failed to update user:", error);
+                    alert("Failed to update user");
+                }
             } else {
                 // Create new user - Call API
                 try {
@@ -148,7 +190,7 @@ export const UsersView: React.FC = () => {
 
                     // Add the created user to the local state
                     const user: User = {
-                        id: createdUser.id.toString(),
+                        id: `${newUser.role}-${createdUser.id}`,
                         name: createdUser.name || newUser.name,
                         email: createdUser.email,
                         type: newUser.role as any,
@@ -176,7 +218,7 @@ export const UsersView: React.FC = () => {
     const closeUserModal = () => {
         setIsAddUserModalOpen(false);
         setEditingId(null);
-        setNewUser({ name: '', email: '', password: '', role: 'B2C', status: 'Active', address: '', city: '', state: '', pincode: '' });
+        setNewUser({ name: '', email: '', password: '', role: 'Staff', status: 'Active', address: '', city: '', state: '', pincode: '' });
         setNewPermissions([]);
     };
 
@@ -223,58 +265,36 @@ export const UsersView: React.FC = () => {
         setOpenActionMenuId(null);
     };
 
-    const handleDeactivateUser = (user: User) => {
-        // Immediate toggle without confirm
+    const handleDeactivateUser = async (user: User) => {
         const newStatus = user.status === 'Active' ? 'Inactive' : 'Active';
-        setUsers(prev => prev.map(u => u.id === user.id ? { ...u, status: newStatus } : u));
-        setOpenActionMenuId(null);
+        try {
+            await apiService.updateUser(user.id, user.type, { status: newStatus });
+            setUsers(prev => prev.map(u => u.id === user.id ? { ...u, status: newStatus } : u));
+            setOpenActionMenuId(null);
+        } catch (error) {
+            console.error("Failed to update user status:", error);
+            alert("Failed to update user status");
+        }
     };
 
-    const handleDeleteUser = (user: User) => {
-        // Immediate delete without confirm
-        setUsers(prev => prev.filter(u => u.id !== user.id));
-        setOpenActionMenuId(null);
-    };
-    // const handleDeleteUser = async (user: User) => {
-    //     try {
-    //         await apiService.deleteUser(parseInt(user.id));
-    //         setUsers(prev => prev.filter(u => u.id !== user.id))
-    //         setOpenActionMenuId(null);
-    //     }
-    //     catch (error) {
-    //         console.log(error);
-    //     }
-    // }
-    // Mock Data Generators for Modal
-    const getMockHistory = (user: User) => {
-        return [
-            { id: 'ORD-8812', date: '2024-05-20', amount: user.type === 'B2B' ? '₹1,12,500' : '₹12,500', status: 'Delivered', items: user.type === 'B2B' ? 25 : 3 },
-            { id: 'ORD-8810', date: '2024-05-15', amount: user.type === 'B2B' ? '₹45,200' : '₹4,200', status: 'Processing', items: user.type === 'B2B' ? 10 : 1 },
-            { id: 'ORD-8790', date: '2024-04-10', amount: user.type === 'B2B' ? '₹89,900' : '₹8,900', status: 'Delivered', items: user.type === 'B2B' ? 20 : 2 },
-        ];
+    const handleDeleteUser = async (user: User) => {
+        if (!confirm(`Are you sure you want to delete ${user.name}?`)) return;
+
+        try {
+            await apiService.deleteUser(user.id, user.type);
+            setUsers(prev => prev.filter(u => u.id !== user.id));
+            setOpenActionMenuId(null);
+        } catch (error) {
+            console.error("Failed to delete user:", error);
+            alert("Failed to delete user");
+        }
     };
 
-    const getMockCart = (user: User) => {
-        // Deterministic random slice based on name length
-        const start = user.name.length % 5;
-        return MOCK_PRODUCTS.slice(start, start + 3).map(p => ({
-            ...p,
-            qty: Math.floor(Math.random() * 3) + 1
-        }));
-    };
-
-    const getMockWishlist = (user: User) => {
-        const start = (user.name.length + 2) % 5;
-        return MOCK_PRODUCTS.slice(start, start + 4);
-    };
-
-    const getMockReturns = (user: User) => {
-        // Simulate some returns
-        return [
-            { id: 'RET-1002', product: MOCK_PRODUCTS[0].name, date: '2024-01-15', reason: 'Defective', status: 'Processed', amount: MOCK_PRODUCTS[0].b2cPrice },
-            { id: 'RET-1089', product: MOCK_PRODUCTS[2].name, date: '2023-11-20', reason: 'Changed Mind', status: 'Rejected', amount: MOCK_PRODUCTS[2].b2cPrice },
-        ];
-    };
+    // Mock Data Generators for Modal (Empty for now)
+    const getMockHistory = (user: User) => [];
+    const getMockCart = (user: User) => [];
+    const getMockWishlist = (user: User) => [];
+    const getMockReturns = (user: User) => [];
 
     // Explicitly show access level column for Admin OR Staff tabs
     const showAccessLevel = activeTab === 'Admin Users' || activeTab === 'Staff Users';
@@ -284,7 +304,7 @@ export const UsersView: React.FC = () => {
             {/* Header */}
             <div>
                 <h2 className="text-2xl font-bold text-gray-900">User Management</h2>
-                <p className="text-gray-500 mt-1">Manage B2B, B2C, admin and staff users</p>
+                <p className="text-gray-500 mt-1">Manage admin and staff users</p>
             </div>
 
             {/* Tabs */}
@@ -310,53 +330,7 @@ export const UsersView: React.FC = () => {
             {/* Content Switch */}
             {activeTab === 'Activity Logs' ? (
                 /* Activity Logs View */
-                <div className="space-y-4">
-                    <div className="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
-                        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-                            <h3 className="text-sm font-bold text-gray-700 uppercase">Recent System Activity</h3>
-                        </div>
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-white">
-                                    <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">User</th>
-                                        <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Action</th>
-                                        <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Details</th>
-                                        <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Timestamp</th>
-                                        <th className="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
-                                    {MOCK_USER_ACTIVITY_LOGS.map((log) => (
-                                        <tr key={log.id} className="hover:bg-gray-50">
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm font-medium text-gray-900">{log.user}</div>
-                                                <div className="text-xs text-gray-500">{log.role}</div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                                {log.action}
-                                            </td>
-                                            <td className="px-6 py-4 text-sm text-gray-500">
-                                                {log.details}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
-                                                {log.timestamp}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-center">
-                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium
-                                              ${log.status === 'Success' ? 'bg-green-50 text-green-700 border border-green-100' :
-                                                        log.status === 'Failed' ? 'bg-red-50 text-red-700 border border-red-100' :
-                                                            'bg-amber-50 text-amber-700 border border-amber-100'}`}>
-                                                    {getStatusIcon(log.status)} {log.status}
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
+                <ActivityLogsSection />
             ) : (
                 /* Users List View */
                 <>
@@ -374,7 +348,7 @@ export const UsersView: React.FC = () => {
                                 className="block w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg leading-5 bg-white placeholder-gray-400 focus:outline-none focus:placeholder-gray-500 focus:ring-1 focus:ring-gray-500 focus:border-gray-500 sm:text-sm text-gray-900"
                             />
                         </div>
-                        {(activeTab === 'Admin Users' || activeTab === 'Staff Users') && (
+                        {(activeTab !== 'Activity Logs') && (
                             <button
                                 onClick={openCreateModal}
                                 className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-gray-900 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors"
@@ -394,20 +368,32 @@ export const UsersView: React.FC = () => {
                                         <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                                             Name
                                         </th>
-                                        <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                                            Email
-                                        </th>
-                                        <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                                            Status
-                                        </th>
-                                        {showAccessLevel && (
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                                                Access Level
-                                            </th>
+
+                                        {/* Conditional Columns based on Tab */}
+                                        {activeTab === 'B2B Users' && (
+                                            <>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Email</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Phone Number</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
+                                            </>
                                         )}
-                                        <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                                            Join Date
-                                        </th>
+
+                                        {activeTab === 'B2C Users' && (
+                                            <>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Phone Number</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Email</th>
+                                            </>
+                                        )}
+
+                                        {(activeTab === 'Admin Users' || activeTab === 'Staff Users') && (
+                                            <>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Email</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Access Level</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Join Date</th>
+                                            </>
+                                        )}
+
                                         <th scope="col" className="px-6 py-3 text-center text-xs font-bold text-gray-700 uppercase tracking-wider">
                                             Action
                                         </th>
@@ -419,46 +405,75 @@ export const UsersView: React.FC = () => {
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="text-sm font-medium text-gray-900">{user.name}</div>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm text-gray-500">{user.email}</div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${user.status === 'Active'
-                                                    ? 'bg-green-100 text-green-800'
-                                                    : 'bg-gray-100 text-gray-800'
-                                                    }`}>
-                                                    {user.status}
-                                                </span>
-                                            </td>
-                                            {showAccessLevel && (
-                                                <td className="px-6 py-4 whitespace-normal max-w-[250px]">
-                                                    {user.type === 'Admin' ? (
-                                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 border border-purple-200">
-                                                            <ShieldAlert size={10} /> All Access
+
+                                            {/* B2B Columns */}
+                                            {activeTab === 'B2B Users' && (
+                                                <>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.email}</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.phone || '-'}</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                                                            ${user.status === 'Active' || user.status === 'approved' ? 'bg-green-100 text-green-800' :
+                                                                user.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                                                    user.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                                                                        'bg-gray-100 text-gray-800'}`}>
+                                                            {user.status}
                                                         </span>
-                                                    ) : (
-                                                        <div className="flex flex-col items-start gap-2">
-                                                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200">
-                                                                <Activity size={10} /> Limited Access
-                                                            </span>
-                                                            <div className="flex flex-wrap gap-1.5">
-                                                                {user.permissions && user.permissions.length > 0 ? (
-                                                                    user.permissions.map((perm, idx) => (
-                                                                        <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-100">
-                                                                            {perm}
-                                                                        </span>
-                                                                    ))
-                                                                ) : (
-                                                                    <span className="text-xs text-gray-400 italic">No specific permissions</span>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </td>
+                                                    </td>
+                                                </>
                                             )}
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                {user.joinDate}
-                                            </td>
+
+                                            {/* B2C Columns */}
+                                            {activeTab === 'B2C Users' && (
+                                                <>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.phone || '-'}</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.email}</td>
+                                                </>
+                                            )}
+
+                                            {/* Admin/Staff Columns */}
+                                            {(activeTab === 'Admin Users' || activeTab === 'Staff Users') && (
+                                                <>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.email}</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                                                            ${user.status === 'Active' || user.status === 'approved' ? 'bg-green-100 text-green-800' :
+                                                                user.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                                                    user.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                                                                        'bg-gray-100 text-gray-800'}`}>
+                                                            {user.status}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-normal max-w-[250px]">
+                                                        {user.type === 'Admin' ? (
+                                                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 border border-purple-200">
+                                                                <ShieldAlert size={10} /> All Access
+                                                            </span>
+                                                        ) : (
+                                                            <div className="flex flex-col items-start gap-2">
+                                                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200">
+                                                                    <Activity size={10} /> Limited Access
+                                                                </span>
+                                                                <div className="flex flex-wrap gap-1.5">
+                                                                    {user.permissions && user.permissions.length > 0 ? (
+                                                                        user.permissions.map((perm, idx) => (
+                                                                            <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-100">
+                                                                                {perm}
+                                                                            </span>
+                                                                        ))
+                                                                    ) : (
+                                                                        <span className="text-xs text-gray-400 italic">No specific permissions</span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                        {user.joinDate}
+                                                    </td>
+                                                </>
+                                            )}
+
                                             <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium relative">
                                                 <div className="flex items-center justify-center gap-2">
                                                     {(user.type === 'B2B' || user.type === 'B2C') && (
@@ -611,7 +626,7 @@ export const UsersView: React.FC = () => {
                             </div>
 
                             {/* Address Fields - Only for Staff users */}
-                            {newUser.role === 'Staff' && (
+                            {(newUser.role === 'Staff' || newUser.role === 'Admin') && (
                                 <div className="border-t border-slate-100 pt-4">
                                     <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
                                         <MapPin size={16} className="text-slate-400" /> Address Details
@@ -735,7 +750,7 @@ export const UsersView: React.FC = () => {
                         </div>
 
                         <div className="overflow-y-auto bg-slate-50 flex-1 p-6">
-                            {/* Address Card (Always Visible or dependent? Typically helpful to see context) */}
+                            {/* Address Card */}
                             <div className="bg-white p-4 rounded-lg border border-slate-200 mb-6 shadow-sm">
                                 <h4 className="text-sm font-bold text-gray-900 mb-2 flex items-center gap-2">
                                     <MapPin size={16} className="text-blue-600" /> Registered Address
@@ -889,6 +904,226 @@ export const UsersView: React.FC = () => {
                     </div>
                 </div>
             )}
+        </div>
+    );
+};
+
+// Activity Logs Section Component
+const ActivityLogsSection: React.FC = () => {
+    const [activityLogs, setActivityLogs] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [filterUserType, setFilterUserType] = useState<string>('');
+    const [filterModule, setFilterModule] = useState<string>('');
+    const [filterStatus, setFilterStatus] = useState<string>('');
+    const [searchTerm, setSearchTerm] = useState('');
+
+    useEffect(() => {
+        fetchActivityLogs();
+    }, [filterUserType, filterModule, filterStatus, searchTerm]);
+
+    const fetchActivityLogs = async () => {
+        try {
+            setLoading(true);
+            const logs = await apiService.getActivityLogs({
+                limit: 100,
+                user_type: filterUserType || undefined,
+                module: filterModule || undefined,
+                status: filterStatus || undefined,
+                search: searchTerm || undefined
+            });
+
+            // Filter to show only Admin and Staff activities (exclude B2B and B2C)
+            const filteredLogs = logs.filter(log =>
+                log.user_type === 'Admin' || log.user_type === 'Staff'
+            );
+
+            setActivityLogs(filteredLogs);
+        } catch (error) {
+            console.error('Failed to fetch activity logs:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleExport = async () => {
+        try {
+            const blob = await apiService.exportActivityLogs({
+                user_type: filterUserType || undefined,
+                module: filterModule || undefined,
+                status: filterStatus || undefined,
+                search: searchTerm || undefined
+            });
+
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `activity_logs_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Failed to export activity logs:', error);
+            alert('Failed to export activity logs');
+        }
+    };
+
+    const getStatusIcon = (status: string) => {
+        switch (status) {
+            case 'Success': return <CheckCircle size={14} className="text-green-500" />;
+            case 'Failed': return <XCircle size={14} className="text-red-500" />;
+            case 'Warning': return <AlertTriangle size={14} className="text-amber-500" />;
+            default: return <Activity size={14} className="text-gray-500" />;
+        }
+    };
+
+    const formatTimestamp = (timestamp: string) => {
+        const date = new Date(timestamp);
+        return date.toLocaleString('en-IN', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
+
+    return (
+        <div className="space-y-4">
+            {/* Filters */}
+            <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Search</label>
+                        <input
+                            type="text"
+                            placeholder="Search logs..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-gray-500 text-gray-900"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">User Type</label>
+                        <select
+                            value={filterUserType}
+                            onChange={(e) => setFilterUserType(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-gray-500 text-gray-900"
+                        >
+                            <option value="">All Types</option>
+                            <option value="Admin">Admin</option>
+                            <option value="Staff">Staff</option>
+                            {/* <option value="B2B">B2B</option>
+                            <option value="B2C">B2C</option> */}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Module</label>
+                        <select
+                            value={filterModule}
+                            onChange={(e) => setFilterModule(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-gray-500 text-gray-900"
+                        >
+                            <option value="">All Modules</option>
+                            <option value="Users">Users</option>
+                            <option value="Orders">Orders</option>
+                            <option value="Products">Products</option>
+                            <option value="Delivery">Delivery</option>
+                            <option value="Refunds">Refunds</option>
+                            <option value="Authentication">Authentication</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
+                        <select
+                            value={filterStatus}
+                            onChange={(e) => setFilterStatus(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-gray-500 text-gray-900"
+                        >
+                            <option value="">All Status</option>
+                            <option value="Success">Success</option>
+                            <option value="Failed">Failed</option>
+                            <option value="Warning">Warning</option>
+                        </select>
+                    </div>
+                </div>
+                <div className="mt-4 flex justify-end">
+                    <button
+                        onClick={handleExport}
+                        className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                    >
+                        <FileText size={16} className="mr-2" />
+                        Export CSV
+                    </button>
+                </div>
+            </div>
+
+            {/* Activity Logs Table */}
+            <div className="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <h3 className="text-sm font-bold text-gray-700 uppercase">Activity Logs</h3>
+                </div>
+                <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-white">
+                            <tr>
+                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">User</th>
+                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Role</th>
+                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Action</th>
+                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Module</th>
+                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Details</th>
+                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Timestamp</th>
+                                <th className="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                            {loading ? (
+                                <tr>
+                                    <td colSpan={7} className="px-6 py-10 text-center text-gray-500">
+                                        Loading activity logs...
+                                    </td>
+                                </tr>
+                            ) : activityLogs.length === 0 ? (
+                                <tr>
+                                    <td colSpan={7} className="px-6 py-10 text-center text-gray-500">
+                                        No activity logs found.
+                                    </td>
+                                </tr>
+                            ) : (
+                                activityLogs.map((log) => (
+                                    <tr key={log.id} className="hover:bg-gray-50 transition-colors">
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="text-sm font-medium text-gray-900">{log.user_name || 'System'}</div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                                ${log.user_type === 'Admin' ? 'bg-purple-100 text-purple-800' :
+                                                    log.user_type === 'Staff' ? 'bg-blue-100 text-blue-800' :
+                                                        log.user_type === 'B2B' ? 'bg-green-100 text-green-800' :
+                                                            log.user_type === 'B2C' ? 'bg-orange-100 text-orange-800' :
+                                                                'bg-gray-100 text-gray-800'}`}>
+                                                {log.user_type || 'N/A'}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{log.action}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{log.module}</td>
+                                        <td className="px-6 py-4 text-sm text-gray-500 max-w-md truncate">{log.details || '-'}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            {formatTimestamp(log.timestamp)}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                                            <div className="flex items-center justify-center gap-1">
+                                                {getStatusIcon(log.status)}
+                                                <span className="text-xs text-gray-600">{log.status}</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     );
 };

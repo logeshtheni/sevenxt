@@ -1,15 +1,20 @@
 from datetime import datetime, timedelta
-from typing import Optional, List
+from typing import Optional, List, Union
 from jose import JWTError, jwt
 # from passlib.context import CryptContext  # Causing crashes on Windows
 from sqlalchemy.orm import Session
 from app.config import settings
-from app.modules.auth.models import EmployeeUser, User
+from app.modules.auth.models import EmployeeUser, User, AdminUser
 
 # pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 import hashlib
 import os
+import random
+
+def generate_otp(length: int = 6) -> str:
+    """Generate a random numeric OTP"""
+    return "".join([str(random.randint(0, 9)) for _ in range(length)])
 
 def get_password_hash(password: str) -> str:
     """Hash a password using SHA-256 with a salt"""
@@ -50,78 +55,70 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
-def authenticate_employee(db: Session, email: str, password: str) -> Optional[EmployeeUser]:
+def authenticate_employee(db: Session, email: str, password: str) -> Optional[Union[EmployeeUser, AdminUser]]:
     """Authenticate an employee (admin/staff) by email and password"""
-    # Check if employee exists and is not deleted
+    
+    # Check AdminUser first
+    admin = db.query(AdminUser).filter(
+        AdminUser.email == email,
+        AdminUser.deleted_at.is_(None)
+    ).first()
+    
+    if admin:
+        if admin.status and admin.status.lower() != "active": return None
+        if verify_password(password, admin.password):
+            # Update last login
+            try:
+                admin.last_login = datetime.utcnow()
+                db.commit()
+                db.refresh(admin)
+            except Exception:
+                db.rollback()
+            return admin
+            
+    # Check EmployeeUser
     employee = db.query(EmployeeUser).filter(
         EmployeeUser.email == email,
         EmployeeUser.deleted_at.is_(None)
     ).first()
     
-    if not employee:
-        return None
-    
-    # Check if employee is active
-    if employee.status and employee.status.lower() != "active":
-        return None
-    
-    # Verify password
-    if not verify_password(password, employee.password):
-        return None
-    
-    # Update last login
+    if employee:
+        if employee.status and employee.status.lower() != "active": return None
+        if verify_password(password, employee.password):
+            # Update last login
+            try:
+                employee.last_login = datetime.utcnow()
+                db.commit()
+                db.refresh(employee)
+            except Exception:
+                db.rollback()
+            return employee
+            
+    return None
+
+def get_employee_by_email(db: Session, email: str) -> Optional[Union[EmployeeUser, AdminUser]]:
+    """Get an employee by email"""
+    # Check AdminUser first
     try:
-        employee.last_login = datetime.utcnow()
-        db.commit()
-        db.refresh(employee)
+        admin = db.query(AdminUser).filter(
+            AdminUser.email == email,
+            AdminUser.deleted_at.is_(None)
+        ).first()
+        if admin: return admin
     except Exception:
         db.rollback()
-    
-    return employee
 
-def get_employee_by_email(db: Session, email: str) -> Optional[EmployeeUser]:
-    """Get an employee by email"""
-    return db.query(EmployeeUser).filter(
-        EmployeeUser.email == email,
-        EmployeeUser.deleted_at.is_(None)
-    ).first()
+    try:
+        return db.query(EmployeeUser).filter(
+            EmployeeUser.email == email,
+            EmployeeUser.deleted_at.is_(None)
+        ).first()
+    except Exception:
+        db.rollback()
+        
+    return None
 
-def get_all_users(db: Session, skip: int = 0, limit: int = 100) -> List[User]:
-    """Get all B2B/B2C users for display"""
-    return db.query(User).filter(
-        User.deleted_at.is_(None)
-    ).offset(skip).limit(limit).all()
 
-def get_all_employees(db: Session) -> List[EmployeeUser]:
-    """Get all admin/staff users"""
-    return db.query(EmployeeUser).filter(
-        EmployeeUser.deleted_at.is_(None)
-    ).all()
-
-def create_employee(db: Session, employee_data: dict) -> EmployeeUser:
-    """Create a new employee (admin/staff)"""
-    # Hash the password
-    hashed_password = get_password_hash(employee_data['password'])
-    
-    # Create employee object
-    new_employee = EmployeeUser(
-        name=employee_data['name'],
-        email=employee_data['email'],
-        password=hashed_password,
-        role=employee_data.get('role', 'staff'),
-        status=employee_data.get('status', 'active'),
-        address=employee_data.get('address'),
-        city=employee_data.get('city'),
-        state=employee_data.get('state'),
-        pincode=employee_data.get('pincode'),
-        permissions=employee_data.get('permissions')
-    )
-    
-    db.add(new_employee)
-    db.commit()
-    db.refresh(new_employee)
-    
-    return new_employee
 
 def get_user_by_email(db: Session, email: str) -> Optional[User]:
     """Get a B2B/B2C user by email"""
@@ -162,46 +159,32 @@ from app.modules.auth.sendgrid_utils import sendgrid_service
 def request_password_reset_otp(db: Session, email: str) -> Optional[str]:
     """Generate OTP, store it in DB, and send via SendGrid"""
     
-    # Check if user exists in Employee table
-    employee = db.query(EmployeeUser).filter(
-        EmployeeUser.email == email,
-        EmployeeUser.deleted_at.is_(None)
-    ).first()
+    # Check Admin
+    admin = db.query(AdminUser).filter(AdminUser.email == email, AdminUser.deleted_at.is_(None)).first()
     
-    # Check if user exists in User table (if not found in Employee)
-    user = None
-    if not employee:
-        user = db.query(User).filter(
-            User.email == email,
-            User.deleted_at.is_(None)
-        ).first()
+    # Check Employee
+    employee = db.query(EmployeeUser).filter(EmployeeUser.email == email, EmployeeUser.deleted_at.is_(None)).first()
     
-    if not employee and not user:
-        return None
+    # Check User
+    user = db.query(User).filter(User.email == email, User.deleted_at.is_(None)).first()
     
-    # Generate a 6-digit OTP
+    target = admin or employee or user
+    if not target: return None
+    
+    # Generate OTP
     otp = generate_otp()
     otp_expires = datetime.utcnow() + timedelta(minutes=10)
     
-    # Store OTP in database (using reset_token field)
-    if employee:
-        employee.reset_token = otp
-        employee.reset_token_expires = otp_expires
-    if user:
-        user.reset_token = otp
-        user.reset_token_expires = otp_expires
+    target.reset_token = otp
+    target.reset_token_expires = otp_expires
     
     db.commit()
     
     # Send OTP via SendGrid
     sent = sendgrid_service.send_otp_email(email, otp)
-    print(f"🔐 OTP for {email}: {otp}")  # KEEP THIS FOR DEBUGGING
-    print(f"ℹ️  If email is not received, please check SPAM folder or use the code above.")
+    print(f"🔐 OTP for {email}: {otp}")
     
     if not sent:
-        print(f"⚠️ SendGrid failed, but OTP stored. OTP for {email}: {otp}")
-        # Still return success since OTP is generated and stored
-        # The OTP will be shown in console for testing
         return "sent_fallback"
         
     return "sent_via_sendgrid"
@@ -209,52 +192,22 @@ def request_password_reset_otp(db: Session, email: str) -> Optional[str]:
 def reset_password_with_otp(db: Session, email: str, otp: str, new_password: str) -> bool:
     """Verify OTP from database and reset password"""
     
-    employee = db.query(EmployeeUser).filter(
-        EmployeeUser.email == email,
-        EmployeeUser.deleted_at.is_(None)
-    ).first()
+    admin = db.query(AdminUser).filter(AdminUser.email == email, AdminUser.deleted_at.is_(None)).first()
+    employee = db.query(EmployeeUser).filter(EmployeeUser.email == email, EmployeeUser.deleted_at.is_(None)).first()
+    user = db.query(User).filter(User.email == email, User.deleted_at.is_(None)).first()
     
-    user = db.query(User).filter(
-        User.email == email,
-        User.deleted_at.is_(None)
-    ).first()
+    target = admin or employee or user
+    if not target: return False
     
-    if not employee and not user:
+    if not target.reset_token or target.reset_token != otp:
         return False
-    
-    # Check OTP for employee
-    if employee:
-        if not employee.reset_token or employee.reset_token != otp:
-            print(f"❌ Invalid OTP for employee. Expected: {employee.reset_token}, Got: {otp}")
-            return False
-        if employee.reset_token_expires and employee.reset_token_expires < datetime.utcnow():
-            print(f"❌ OTP expired for employee")
-            return False
-    
-    # Check OTP for user (if no employee found)
-    if user and not employee:
-        if not user.reset_token or user.reset_token != otp:
-            print(f"❌ Invalid OTP for user. Expected: {user.reset_token}, Got: {otp}")
-            return False
-        if user.reset_token_expires and user.reset_token_expires < datetime.utcnow():
-            print(f"❌ OTP expired for user")
-            return False
+    if target.reset_token_expires and target.reset_token_expires < datetime.utcnow():
+        return False
         
-    # Update Password
-    hashed_password = get_password_hash(new_password)
-    
-    if employee:
-        employee.password = hashed_password
-        employee.reset_token = None
-        employee.reset_token_expires = None
-        
-    if user:
-        user.password = hashed_password
-        user.reset_token = None
-        user.reset_token_expires = None
+    target.password = get_password_hash(new_password)
+    target.reset_token = None
+    target.reset_token_expires = None
     
     db.commit()
-    print(f"✅ Password reset successfully for {email}")
-    
     return True
 
