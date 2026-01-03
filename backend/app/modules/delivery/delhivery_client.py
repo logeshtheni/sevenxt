@@ -19,6 +19,7 @@ class DelhiveryClient:
     def create_shipment(self, order_data: dict) -> dict:
         """
         Create shipment in Delhivery and generate AWB number
+        Supports both forward and return shipments
         """
         url = f"{self.base_url}/api/cmu/create.json"
         print("DELHIVERY CREATE SHIPMENT URL:", url)
@@ -27,43 +28,59 @@ class DelhiveryClient:
         phone = str(order_data.get("phone", ""))
         
         print(f"[DEBUG] Phone number being sent: {phone}")
+        
+        # Check if this is a return shipment
+        is_return = order_data.get("is_return", False)
+
+        shipment_payload = {
+            "name": order_data["customer_name"],
+            "add": order_data["address"],
+            "pin": str(order_data["pincode"]),  # Ensure string
+            "city": order_data["city"],
+            "state": order_data["state"],
+            "country": "India",
+            "phone": str(phone),  # Ensure string
+            "mobile": str(phone), # Add mobile field as well
+            "email": order_data.get("email", "noreply@sevenxt.com"),  # Add email field
+            "order": str(order_data["order_id"]),  # Ensure string
+            "payment_mode": "Prepaid"
+            if order_data.get("payment_status") in ["Paid", "Prepaid"]
+            else "COD",
+            "products_desc": order_data.get("item_name", "Product"),
+            "hsn_code": "",
+            "cod_amount": (
+                0.0
+                if order_data.get("payment_status") in ["Paid", "Prepaid"]
+                else float(order_data["amount"])
+            ),
+            "order_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "total_amount": float(order_data["amount"]),
+            "quantity": int(order_data.get("quantity", 1)),
+            # Dimensions (CM)
+            "shipment_length": float(order_data["length"]),
+            "shipment_breadth": float(order_data["breadth"]),
+            "shipment_height": float(order_data["height"]),
+            # Weight in KG (IMPORTANT)
+            "shipment_weight": float(order_data["weight"]),
+            # Service Type: E (Express) or S (Surface)
+            "service": order_data.get("service_type", "E"),
+        }
+        
+        # Add return/pickup details if this is a return shipment
+        if is_return and "pickup_name" in order_data:
+            shipment_payload.update({
+                "return_name": order_data.get("pickup_name"),
+                "return_add": order_data.get("pickup_address"),
+                "return_pin": str(order_data.get("pickup_pincode", "")),
+                "return_city": order_data.get("pickup_city"),
+                "return_state": order_data.get("pickup_state"),
+                "return_phone": str(order_data.get("pickup_phone", "")),
+                "return_country": "India",
+            })
+            print(f"[DEBUG] Return shipment - Pickup from: {order_data.get('pickup_name')}, {order_data.get('pickup_city')}")
 
         payload_data = {
-            "shipments": [
-                {
-                    "name": order_data["customer_name"],
-                    "add": order_data["address"],
-                    "pin": str(order_data["pincode"]),  # Ensure string
-                    "city": order_data["city"],
-                    "state": order_data["state"],
-                    "country": "India",
-                    "phone": str(phone),  # Ensure string
-                    "mobile": str(phone), # Add mobile field as well
-                    "email": order_data.get("email", "noreply@sevenxt.com"),  # Add email field
-                    "order": str(order_data["order_id"]),  # Ensure string
-                    "payment_mode": "Prepaid"
-                    if order_data.get("payment_status") in ["Paid", "Prepaid"]
-                    else "COD",
-                    "products_desc": order_data.get("item_name", "Product"),
-                    "hsn_code": "",
-                    "cod_amount": (
-                        0.0
-                        if order_data.get("payment_status") in ["Paid", "Prepaid"]
-                        else float(order_data["amount"])
-                    ),
-                    "order_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "total_amount": float(order_data["amount"]),
-                    "quantity": int(order_data.get("quantity", 1)),
-                    # Dimensions (CM)
-                    "shipment_length": float(order_data["length"]),
-                    "shipment_breadth": float(order_data["breadth"]),
-                    "shipment_height": float(order_data["height"]),
-                    # Weight in KG (IMPORTANT)
-                    "shipment_weight": float(order_data["weight"]),
-                    # Service Type: E (Express) or S (Surface)
-                    "service": order_data.get("service_type", "E"),
-                }
-            ],
+            "shipments": [shipment_payload],
             "pickup_location": {
                 # MUST MATCH EXACT NAME CREATED IN DELHIVERY
                 "name": "sevenxt"

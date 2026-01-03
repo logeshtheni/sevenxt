@@ -5,11 +5,8 @@ from app.database import get_db
 from app.modules.auth.routes import get_current_employee
 from app.modules.auth.models import EmployeeUser
 from . import schemas, service
-<<<<<<< HEAD
 from datetime import datetime
 from app.modules.activity_logs.service import log_activity
-=======
->>>>>>> 1e65977e (connnect)
 
 router = APIRouter(prefix="/products", tags=["Products"])
 
@@ -17,7 +14,6 @@ router = APIRouter(prefix="/products", tags=["Products"])
 async def import_products(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-<<<<<<< HEAD
     # current_user: EmployeeUser = Depends(get_current_employee)
 ):
     """
@@ -114,34 +110,6 @@ def read_products(
         raise HTTPException(status_code=500, detail=f"Error fetching products: {str(e)}")
 
 @router.get("/{product_id}", response_model=schemas.ProductResponse, response_model_by_alias=True)
-=======
-    current_user: EmployeeUser = Depends(get_current_employee)
-):
-    """
-    Bulk import products from Excel file.
-    """
-    if not file.filename.endswith(('.xlsx', '.xls')):
-        raise HTTPException(status_code=400, detail="Invalid file format. Please upload an Excel file.")
-    
-    try:
-        contents = await file.read()
-        result = service.process_bulk_import(db, contents)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
-
-@router.get("", response_model=List[schemas.ProductResponse])
-def read_products(
-    skip: int = 0, 
-    limit: int = 100, 
-    db: Session = Depends(get_db),
-    # current_user: EmployeeUser = Depends(get_current_employee) # Optional: Protect route
-):
-    products = service.get_products(db, skip=skip, limit=limit)
-    return products
-
-@router.get("/{product_id}", response_model=schemas.ProductResponse)
->>>>>>> 1e65977e (connnect)
 def read_product(
     product_id: str, 
     db: Session = Depends(get_db),
@@ -152,12 +120,11 @@ def read_product(
         raise HTTPException(status_code=404, detail="Product not found")
     return db_product
 
-<<<<<<< HEAD
 @router.post("", response_model=schemas.ProductResponse, response_model_by_alias=True)
 def create_product(
     product: schemas.ProductCreate, 
     db: Session = Depends(get_db),
-    # current_user: EmployeeUser = Depends(get_current_employee)
+    current_user: EmployeeUser = Depends(get_current_employee)
 ):
     new_product = service.create_product(db=db, product=product)
     
@@ -166,8 +133,9 @@ def create_product(
         db=db,
         action="Created Product",
         module="Products",
-        user_name="Admin",  # TODO: Get from current_user
-        user_type="Admin",
+        user_id=str(current_user.id),
+        user_name=current_user.name,
+        user_type=current_user.role.capitalize(),
         details=f"Created new product: {product.name} (ID: {new_product.id})",
         status="Success",
         affected_entity_type="Product",
@@ -177,39 +145,24 @@ def create_product(
     return new_product
 
 @router.put("/{product_id}", response_model=schemas.ProductResponse, response_model_by_alias=True)
-=======
-@router.post("", response_model=schemas.ProductResponse)
-def create_product(
-    product: schemas.ProductCreate, 
-    db: Session = Depends(get_db),
-    current_user: EmployeeUser = Depends(get_current_employee)
-):
-    return service.create_product(db=db, product=product)
-
-@router.put("/{product_id}", response_model=schemas.ProductResponse)
->>>>>>> 1e65977e (connnect)
 def update_product(
     product_id: str, 
     product: schemas.ProductUpdate, 
     db: Session = Depends(get_db),
-<<<<<<< HEAD
-    # current_user: EmployeeUser = Depends(get_current_employee)
-=======
     current_user: EmployeeUser = Depends(get_current_employee)
->>>>>>> 1e65977e (connnect)
 ):
     db_product = service.update_product(db=db, product_id=product_id, product=product)
     if db_product is None:
         raise HTTPException(status_code=404, detail="Product not found")
-<<<<<<< HEAD
     
     # Log activity
     log_activity(
         db=db,
         action="Updated Product",
         module="Products",
-        user_name="Admin",  # TODO: Get from current_user
-        user_type="Admin",
+        user_id=str(current_user.id),
+        user_name=current_user.name,
+        user_type=current_user.role.capitalize(),
         details=f"Updated product: {db_product.name} (ID: {product_id})",
         status="Success",
         affected_entity_type="Product",
@@ -222,7 +175,7 @@ def update_product(
 def delete_product(
     product_id: str, 
     db: Session = Depends(get_db),
-    # current_user: EmployeeUser = Depends(get_current_employee)
+    current_user: EmployeeUser = Depends(get_current_employee)
 ):
     success = service.delete_product(db=db, product_id=product_id)
     if not success:
@@ -233,8 +186,9 @@ def delete_product(
         db=db,
         action="Deleted Product",
         module="Products",
-        user_name="Admin",  # TODO: Get from current_user
-        user_type="Admin",
+        user_id=str(current_user.id),
+        user_name=current_user.name,
+        user_type=current_user.role.capitalize(),
         details=f"Deleted product with ID: {product_id}",
         status="Success",
         affected_entity_type="Product",
@@ -242,17 +196,3 @@ def delete_product(
     )
     
     return {"status": "success"}
-=======
-    return db_product
-
-# @router.delete("/{product_id}")
-# def delete_product(
-#     product_id: str, 
-#     db: Session = Depends(get_db),
-#     current_user: EmployeeUser = Depends(get_current_employee)
-# ):
-#     success = service.delete_product(db=db, product_id=product_id)
-#     if not success:
-#         raise HTTPException(status_code=404, detail="Product not found")
-#     return {"status": "success"}
->>>>>>> 1e65977e (connnect)

@@ -5,6 +5,7 @@ from app.database import Base
 
 class B2BApplication(Base):
     __tablename__ = "b2b_applications"
+    __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
     business_name = Column(Text, nullable=True)
@@ -20,6 +21,7 @@ class B2BApplication(Base):
 
 class B2CApplication(Base):
     __tablename__ = "b2c_applications"
+    __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
     full_name = Column(Text, nullable=True)  # Actual column name in DB
@@ -58,6 +60,12 @@ class Order(Base):
     weight = Column(Integer, nullable=True)
     breadth = Column(Integer, nullable=True)
     length = Column(Integer, nullable=True)
+
+    # GST and Pricing fields
+    original_price = Column(DECIMAL(10, 2), nullable=True)  # Price before tax
+    sgst_percentage = Column(DECIMAL(5, 2), nullable=True)  # SGST percentage (e.g., 9.00 for 9%)
+    cgst_percentage = Column(DECIMAL(5, 2), nullable=True)  # CGST percentage (e.g., 9.00 for 9%)
+    hsn = Column(String(20), nullable=True)  # HSN code
 
     #return AWb number annd label
     # return_awb_number = Column(String(255), nullable=True)

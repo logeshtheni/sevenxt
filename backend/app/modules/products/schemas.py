@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 from pydantic import BaseModel, Field, field_validator
-=======
-from pydantic import BaseModel, Field
->>>>>>> 1e65977e (connnect)
 from typing import List, Optional
 from datetime import datetime
 
@@ -24,11 +20,7 @@ class ProductAttribute(ProductAttributeBase):
 # --- Variants ---
 class ProductVariantBase(BaseModel):
     color: str
-<<<<<<< HEAD
     color_code: str = Field(..., alias="colorCode")
-=======
-    colorCode: str = Field(..., alias="color_code")
->>>>>>> 1e65977e (connnect)
     stock: int
 
 class ProductVariantCreate(ProductVariantBase):
@@ -46,7 +38,6 @@ class ProductVariant(ProductVariantBase):
 class ProductBase(BaseModel):
     name: str
     category: str
-<<<<<<< HEAD
     
     b2c_price: float = Field(0.0, alias="b2cPrice")
     compare_at_price: float = Field(0.0, alias="compareAtPrice")
@@ -63,21 +54,6 @@ class ProductBase(BaseModel):
     b2b_offer_price: float = Field(0.0, alias="b2bOfferPrice")
     b2b_offer_start_date: Optional[datetime] = Field(None, alias="b2bOfferStartDate")
     b2b_offer_end_date: Optional[datetime] = Field(None, alias="b2bOfferEndDate")
-=======
-    brand: Optional[str] = None
-    
-    b2cPrice: float = Field(0.0, alias="b2c_price")
-    compareAtPrice: float = Field(0.0, alias="compare_at_price")
-    b2bPrice: float = Field(0.0, alias="b2b_price")
-    
-    b2cOfferPercentage: float = Field(0.0, alias="b2c_offer_percentage")
-    b2cOfferStartDate: Optional[datetime] = Field(None, alias="b2c_offer_start_date")
-    b2cOfferEndDate: Optional[datetime] = Field(None, alias="b2c_offer_end_date")
-    
-    b2bOfferPercentage: float = Field(0.0, alias="b2b_offer_percentage")
-    b2bOfferStartDate: Optional[datetime] = Field(None, alias="b2b_offer_start_date")
-    b2bOfferEndDate: Optional[datetime] = Field(None, alias="b2b_offer_end_date")
->>>>>>> 1e65977e (connnect)
     
     description: Optional[str] = None
     status: str = "Draft"
@@ -85,7 +61,6 @@ class ProductBase(BaseModel):
     image: Optional[str] = None
     rating: float = 0.0
     reviews: int = 0
-<<<<<<< HEAD
     
     # Tax and Compliance
     sgst: float = 0.0
@@ -109,15 +84,12 @@ class ProductBase(BaseModel):
     class Config:
         populate_by_name = True
         from_attributes = True
-=======
->>>>>>> 1e65977e (connnect)
 
 class ProductCreate(ProductBase):
     id: Optional[str] = None # Optional, if provided use it, else generate
     attributes: List[ProductAttributeCreate] = []
     variants: List[ProductVariantCreate] = []
 
-<<<<<<< HEAD
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
     category: Optional[str] = None
@@ -170,12 +142,6 @@ class ProductUpdate(BaseModel):
     class Config:
         populate_by_name = True
 
-=======
-class ProductUpdate(ProductBase):
-    attributes: Optional[List[ProductAttributeCreate]] = None
-    variants: Optional[List[ProductVariantCreate]] = None
-
->>>>>>> 1e65977e (connnect)
 class ProductResponse(ProductBase):
     id: str
     created_at: Optional[datetime] = None

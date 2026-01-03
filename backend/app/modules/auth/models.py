@@ -18,7 +18,6 @@ class EmployeeUser(Base):
     state = Column(String(100), nullable=True)
     pincode = Column(String(20), nullable=True)
     
-<<<<<<< HEAD
     
     # Permissions for staff users (stored as JSON)
     permissions = Column(JSON, nullable=True)
@@ -27,11 +26,6 @@ class EmployeeUser(Base):
     reset_token = Column(String(255), nullable=True)
     reset_token_expires = Column(DateTime, nullable=True)
     
-=======
-    # Permissions for staff users (stored as JSON)
-    permissions = Column(JSON, nullable=True)
-    
->>>>>>> 1e65977e (connnect)
     # Metadata
     phone = Column(String(15), nullable=True)
     last_login = Column(DateTime, nullable=True)
@@ -64,7 +58,6 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     deleted_at = Column(DateTime, nullable=True)
-<<<<<<< HEAD
 
 
 class AdminUser(Base):
@@ -96,5 +89,3 @@ class AdminUser(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     deleted_at = Column(DateTime, nullable=True)
-=======
->>>>>>> 1e65977e (connnect)
